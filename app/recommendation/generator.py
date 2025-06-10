@@ -5,7 +5,7 @@ This module creates tailoring suggestions for resumes based on comparison result
 It generates specific, actionable recommendations to improve the resume for a job.
 """
 
-from langchain.llms import Ollama
+from langchain_community.llms import Ollama
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
@@ -13,7 +13,7 @@ from langchain.prompts import PromptTemplate
 class RecommendationGenerator:
     """Generator for creating resume tailoring recommendations."""
     
-    def __init__(self, model_name="llama3"):
+    def __init__(self, model_name="qwen3:32b"):
         """
         Initialize the RecommendationGenerator.
         

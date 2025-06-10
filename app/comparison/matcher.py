@@ -5,7 +5,7 @@ This module compares resume content against job requirements to identify
 matches and gaps, and calculates a match score.
 """
 
-from langchain.llms import Ollama
+from langchain_community.llms import Ollama
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
@@ -13,7 +13,7 @@ from langchain.prompts import PromptTemplate
 class ResumeMatcher:
     """Matcher for comparing resume content against job requirements."""
     
-    def __init__(self, model_name="llama3"):
+    def __init__(self, model_name="qwen3:32b"):
         """
         Initialize the ResumeMatcher.
         

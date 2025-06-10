@@ -7,7 +7,7 @@ It uses PyPDF2 for basic text extraction and Ollama for section identification.
 
 import io
 import PyPDF2
-from langchain.llms import Ollama
+from langchain_community.llms import Ollama
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
@@ -15,7 +15,7 @@ from langchain.prompts import PromptTemplate
 class ResumeParser:
     """Parser for extracting and structuring content from PDF resumes."""
     
-    def __init__(self, model_name="llama3"):
+    def __init__(self, model_name="qwen3:32b"):
         """
         Initialize the ResumeParser.
         
