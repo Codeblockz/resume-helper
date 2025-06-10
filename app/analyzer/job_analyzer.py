@@ -5,7 +5,7 @@ This module processes job posting text to identify key requirements and keywords
 It uses Ollama for natural language processing and extraction.
 """
 
-from langchain.llms import Ollama
+from langchain_community.llms import Ollama
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 
@@ -13,7 +13,7 @@ from langchain.prompts import PromptTemplate
 class JobAnalyzer:
     """Analyzer for processing job descriptions and extracting requirements."""
     
-    def __init__(self, model_name="llama3"):
+    def __init__(self, model_name="qwen3:32b"):
         """
         Initialize the JobAnalyzer.
         
