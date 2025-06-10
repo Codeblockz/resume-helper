@@ -1,5 +1,4 @@
 # Core
-python>=3.9
 langchain>=0.0.267
 ollama-python>=0.1.0
 
