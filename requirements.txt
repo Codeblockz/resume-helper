@@ -1,5 +1,7 @@
 # Core
 langchain>=0.0.267
+langchain-community>=0.0.1
+langchain-ollama>=0.0.1
 ollama-python>=0.1.0
 
 # PDF Processing
