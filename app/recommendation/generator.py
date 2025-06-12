@@ -5,8 +5,7 @@ This module creates tailoring suggestions for resumes based on comparison result
 It generates specific, actionable recommendations to improve the resume for a job.
 """
 
-from langchain_community.llms import Ollama
-from langchain.chains import LLMChain
+from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
 
 
@@ -20,7 +19,7 @@ class RecommendationGenerator:
         Args:
             model_name (str): Name of the Ollama model to use for generating recommendations.
         """
-        self.llm = Ollama(model=model_name)
+        self.llm = OllamaLLM(model=model_name)
         
         # Create prompt template for generating recommendations
         self.recommendation_prompt = PromptTemplate(
@@ -69,10 +68,9 @@ class RecommendationGenerator:
             
             The priority should be a number from 1-10, with 10 being the highest priority.
             Focus on specific, actionable changes rather than generic advice.
+            IMPORTANT: Return ONLY the JSON object, with no additional text, explanations, or thinking process.
             """
         )
-        
-        self.recommendation_chain = LLMChain(llm=self.llm, prompt=self.recommendation_prompt)
     
     def generate_recommendations(self, resume_text, job_description, comparison_results):
         """
@@ -86,21 +84,94 @@ class RecommendationGenerator:
         Returns:
             dict: A dictionary of tailoring recommendations.
         """
+        # Validate inputs
+        if not resume_text or not isinstance(resume_text, str):
+            print("Warning: Invalid resume text provided")
+            return self._basic_recommendations()
+            
+        if not job_description or not isinstance(job_description, str):
+            print("Warning: Invalid job description provided")
+            return self._basic_recommendations()
+            
+        if not comparison_results or not isinstance(comparison_results, dict):
+            print("Warning: Invalid comparison results provided")
+            return self._basic_recommendations()
+            
         try:
             # Format comparison results for the prompt
             comparison_results_str = self._format_comparison_results(comparison_results)
             
-            # Run the recommendation generation
-            result = self.recommendation_chain.run(
-                resume_text=resume_text,
-                job_description=job_description,
-                comparison_results=comparison_results_str
-            )
+            # Use the prompt and LLM directly instead of LLMChain
+            chain = self.recommendation_prompt | self.llm
+            result = chain.invoke({
+                "resume_text": resume_text,
+                "job_description": job_description,
+                "comparison_results": comparison_results_str
+            })
             
             # Parse the JSON result
             import json
-            recommendations = json.loads(result)
-            return recommendations
+            try:
+                # Clean the result to ensure it's valid JSON
+                # Sometimes LLMs add extra text before or after the JSON
+                result = result.strip()
+                
+                # Handle thinking process in the response
+                if "<think>" in result and "</think>" in result:
+                    # Extract content between thinking tags
+                    think_start = result.find("<think>")
+                    think_end = result.find("</think>", think_start) + len("</think>")
+                    # Remove the thinking part
+                    result = result[:think_start] + result[think_end:].strip()
+                
+                # If the result starts with a backtick (markdown code block), remove it
+                if result.startswith("```json"):
+                    result = result[7:].strip()
+                if result.startswith("```"):
+                    result = result[3:].strip()
+                if result.endswith("```"):
+                    result = result[:-3].strip()
+                
+                # Try to find JSON in the text - look for opening and closing braces
+                json_start = result.find('{')
+                json_end = result.rfind('}') + 1
+                
+                if json_start >= 0 and json_end > json_start:
+                    # Extract just the JSON part
+                    json_str = result[json_start:json_end]
+                    recommendations = json.loads(json_str)
+                else:
+                    # If no JSON found, create a fallback structure
+                    print("No valid JSON structure found in response")
+                    return self._basic_recommendations()
+                
+                # Validate the structure of the recommendations
+                if "summary" not in recommendations:
+                    print("Warning: Missing 'summary' in recommendations")
+                    recommendations["summary"] = "Consider tailoring your resume to better match the job requirements."
+                
+                if "recommendations" not in recommendations:
+                    print("Warning: Missing 'recommendations' in recommendations")
+                    recommendations["recommendations"] = []
+                elif not isinstance(recommendations["recommendations"], list):
+                    print("Warning: 'recommendations' is not a list")
+                    recommendations["recommendations"] = []
+                
+                if "keyword_suggestions" not in recommendations:
+                    print("Warning: Missing 'keyword_suggestions' in recommendations")
+                    recommendations["keyword_suggestions"] = []
+                elif not isinstance(recommendations["keyword_suggestions"], list):
+                    print("Warning: 'keyword_suggestions' is not a list")
+                    recommendations["keyword_suggestions"] = []
+                
+                # Sort recommendations by priority
+                recommendations = self.prioritize_recommendations(recommendations)
+                
+                return recommendations
+            except json.JSONDecodeError as json_err:
+                print(f"Error parsing JSON from LLM response: {json_err}")
+                print(f"Raw LLM response: {result[:500]}...")  # Print first 500 chars of response
+                return self._basic_recommendations()
         except Exception as e:
             print(f"Error generating recommendations: {e}")
             # Return basic structure as fallback

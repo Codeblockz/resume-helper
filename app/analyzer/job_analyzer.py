@@ -5,8 +5,7 @@ This module processes job posting text to identify key requirements and keywords
 It uses Ollama for natural language processing and extraction.
 """
 
-from langchain_community.llms import Ollama
-from langchain.chains import LLMChain
+from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
 
 
@@ -20,7 +19,7 @@ class JobAnalyzer:
         Args:
             model_name (str): Name of the Ollama model to use for analysis.
         """
-        self.llm = Ollama(model=model_name)
+        self.llm = OllamaLLM(model=model_name)
         
         # Create prompt template for job description analysis
         self.job_analysis_prompt = PromptTemplate(
@@ -48,10 +47,9 @@ class JobAnalyzer:
             }}
             
             Ensure all lists contain string items, not nested objects.
+            IMPORTANT: Return ONLY the JSON object, with no additional text, explanations, or thinking process.
             """
         )
-        
-        self.job_analysis_chain = LLMChain(llm=self.llm, prompt=self.job_analysis_prompt)
     
     def analyze_job_description(self, job_description_text):
         """
@@ -63,12 +61,67 @@ class JobAnalyzer:
         Returns:
             dict: A dictionary containing structured job requirements.
         """
+        if not job_description_text or not job_description_text.strip():
+            print("Warning: Empty job description provided")
+            return self._empty_requirements()
+            
         try:
-            result = self.job_analysis_chain.run(job_description=job_description_text)
+            # Use the prompt and LLM directly instead of LLMChain
+            chain = self.job_analysis_prompt | self.llm
+            result = chain.invoke({"job_description": job_description_text})
+            
             # Parse the JSON result
             import json
-            requirements = json.loads(result)
-            return requirements
+            try:
+                # Clean the result to ensure it's valid JSON
+                # Sometimes LLMs add extra text before or after the JSON
+                result = result.strip()
+                
+                # Handle thinking process in the response
+                if "<think>" in result and "</think>" in result:
+                    # Extract content between thinking tags
+                    think_start = result.find("<think>")
+                    think_end = result.find("</think>", think_start) + len("</think>")
+                    # Remove the thinking part
+                    result = result[:think_start] + result[think_end:].strip()
+                
+                # If the result starts with a backtick (markdown code block), remove it
+                if result.startswith("```json"):
+                    result = result[7:].strip()
+                if result.startswith("```"):
+                    result = result[3:].strip()
+                if result.endswith("```"):
+                    result = result[:-3].strip()
+                
+                # Try to find JSON in the text - look for opening and closing braces
+                json_start = result.find('{')
+                json_end = result.rfind('}') + 1
+                
+                if json_start >= 0 and json_end > json_start:
+                    # Extract just the JSON part
+                    json_str = result[json_start:json_end]
+                    requirements = json.loads(json_str)
+                else:
+                    # If no JSON found, create a fallback structure
+                    print("No valid JSON structure found in response")
+                    return self._empty_requirements()
+                
+                # Validate the structure of the requirements
+                expected_keys = ["required_skills", "preferred_skills", "required_experience", 
+                                "required_education", "responsibilities", "keywords"]
+                for key in expected_keys:
+                    if key not in requirements:
+                        print(f"Warning: Missing '{key}' in job requirements")
+                        requirements[key] = []
+                    elif not isinstance(requirements[key], list):
+                        print(f"Warning: '{key}' is not a list in job requirements")
+                        requirements[key] = [str(requirements[key])] if requirements[key] else []
+                
+                return requirements
+            except json.JSONDecodeError as json_err:
+                print(f"Error parsing JSON from LLM response: {json_err}")
+                print(f"Raw LLM response: {result[:500]}...")  # Print first 500 chars of response
+                return self._empty_requirements()
         except Exception as e:
             print(f"Error analyzing job description: {e}")
             # Return empty structure as fallback

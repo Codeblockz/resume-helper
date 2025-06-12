@@ -5,8 +5,7 @@ This module compares resume content against job requirements to identify
 matches and gaps, and calculates a match score.
 """
 
-from langchain_community.llms import Ollama
-from langchain.chains import LLMChain
+from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
 
 
@@ -20,7 +19,7 @@ class ResumeMatcher:
         Args:
             model_name (str): Name of the Ollama model to use for comparison.
         """
-        self.llm = Ollama(model=model_name)
+        self.llm = OllamaLLM(model=model_name)
         
         # Create prompt template for resume-job comparison
         self.comparison_prompt = PromptTemplate(
@@ -61,10 +60,9 @@ class ResumeMatcher:
             
             The match_score should be a percentage (0-100) representing how well the resume matches the job requirements overall.
             The section_scores should be percentages for each category.
+            IMPORTANT: Return ONLY the JSON object, with no additional text, explanations, or thinking process.
             """
         )
-        
-        self.comparison_chain = LLMChain(llm=self.llm, prompt=self.comparison_prompt)
     
     def compare_resume_to_job(self, resume_data, job_requirements):
         """
@@ -77,6 +75,15 @@ class ResumeMatcher:
         Returns:
             dict: Comparison results with matches, gaps, and scores.
         """
+        # Validate inputs
+        if not resume_data or not isinstance(resume_data, dict):
+            print("Warning: Invalid resume data provided")
+            return self._basic_comparison_result()
+            
+        if not job_requirements or not isinstance(job_requirements, dict):
+            print("Warning: Invalid job requirements provided")
+            return self._basic_comparison_result()
+            
         try:
             # Format resume sections for the prompt
             resume_sections_str = self._format_resume_sections(resume_data)
@@ -84,16 +91,77 @@ class ResumeMatcher:
             # Format job requirements for the prompt
             job_requirements_str = self._format_job_requirements(job_requirements)
             
-            # Run the comparison
-            result = self.comparison_chain.run(
-                resume_sections=resume_sections_str,
-                job_requirements=job_requirements_str
-            )
+            # Use the prompt and LLM directly instead of LLMChain
+            chain = self.comparison_prompt | self.llm
+            result = chain.invoke({
+                "resume_sections": resume_sections_str,
+                "job_requirements": job_requirements_str
+            })
             
             # Parse the JSON result
             import json
-            comparison_results = json.loads(result)
-            return comparison_results
+            try:
+                # Clean the result to ensure it's valid JSON
+                # Sometimes LLMs add extra text before or after the JSON
+                result = result.strip()
+                
+                # Handle thinking process in the response
+                if "<think>" in result and "</think>" in result:
+                    # Extract content between thinking tags
+                    think_start = result.find("<think>")
+                    think_end = result.find("</think>", think_start) + len("</think>")
+                    # Remove the thinking part
+                    result = result[:think_start] + result[think_end:].strip()
+                
+                # If the result starts with a backtick (markdown code block), remove it
+                if result.startswith("```json"):
+                    result = result[7:].strip()
+                if result.startswith("```"):
+                    result = result[3:].strip()
+                if result.endswith("```"):
+                    result = result[:-3].strip()
+                
+                # Try to find JSON in the text - look for opening and closing braces
+                json_start = result.find('{')
+                json_end = result.rfind('}') + 1
+                
+                if json_start >= 0 and json_end > json_start:
+                    # Extract just the JSON part
+                    json_str = result[json_start:json_end]
+                    comparison_results = json.loads(json_str)
+                else:
+                    # If no JSON found, create a fallback structure
+                    print("No valid JSON structure found in response")
+                    return self._basic_comparison_result()
+                
+                # Validate the structure of the comparison results
+                if "matches" not in comparison_results:
+                    print("Warning: Missing 'matches' in comparison results")
+                    comparison_results["matches"] = []
+                
+                if "gaps" not in comparison_results:
+                    print("Warning: Missing 'gaps' in comparison results")
+                    comparison_results["gaps"] = []
+                
+                if "match_score" not in comparison_results:
+                    print("Warning: Missing 'match_score' in comparison results")
+                    comparison_results["match_score"] = 0
+                
+                if "section_scores" not in comparison_results:
+                    print("Warning: Missing 'section_scores' in comparison results")
+                    comparison_results["section_scores"] = {
+                        "required_skills": 0,
+                        "preferred_skills": 0,
+                        "required_experience": 0,
+                        "required_education": 0,
+                        "keywords": 0
+                    }
+                
+                return comparison_results
+            except json.JSONDecodeError as json_err:
+                print(f"Error parsing JSON from LLM response: {json_err}")
+                print(f"Raw LLM response: {result[:500]}...")  # Print first 500 chars of response
+                return self._basic_comparison_result()
         except Exception as e:
             print(f"Error comparing resume to job: {e}")
             # Return basic structure as fallback

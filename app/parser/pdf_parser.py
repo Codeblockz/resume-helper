@@ -6,9 +6,9 @@ It uses PyPDF2 for basic text extraction and Ollama for section identification.
 """
 
 import io
+import os
 import PyPDF2
-from langchain_community.llms import Ollama
-from langchain.chains import LLMChain
+from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
 
 
@@ -22,7 +22,7 @@ class ResumeParser:
         Args:
             model_name (str): Name of the Ollama model to use for section identification.
         """
-        self.llm = Ollama(model=model_name)
+        self.llm = OllamaLLM(model=model_name)
         
         # Create prompt template for section identification
         self.section_id_prompt = PromptTemplate(
@@ -53,30 +53,52 @@ class ResumeParser:
             }}
             """
         )
-        
-        self.section_id_chain = LLMChain(llm=self.llm, prompt=self.section_id_prompt)
     
     def extract_text_from_pdf(self, pdf_file):
         """
         Extract text content from a PDF file.
         
         Args:
-            pdf_file (bytes or file-like object): The PDF file to extract text from.
+            pdf_file (str, bytes, or file-like object): The PDF file to extract text from.
+                Can be a file path string, bytes, or file-like object.
             
         Returns:
             str: The extracted text content.
         """
-        if isinstance(pdf_file, str):  # If it's a file path
-            with open(pdf_file, 'rb') as file:
-                pdf_bytes = file.read()
-        else:  # Assume it's already bytes or file-like
-            pdf_bytes = pdf_file
+        try:
+            # Create a local variable to hold any file objects we open
+            # so they don't get garbage collected before we're done
+            file_obj = None
             
-        reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() + "\n"
-        return text
+            if isinstance(pdf_file, str):  # If it's a file path
+                # Check if the file exists
+                if not os.path.exists(pdf_file):
+                    raise FileNotFoundError(f"PDF file not found: {pdf_file}")
+                
+                # Open the file and keep a reference to it
+                file_obj = open(pdf_file, 'rb')
+                reader = PyPDF2.PdfReader(file_obj)
+            else:  # Assume it's already bytes or file-like
+                if hasattr(pdf_file, 'read'):  # File-like object
+                    reader = PyPDF2.PdfReader(pdf_file)
+                else:  # Bytes
+                    # Create a BytesIO object and keep a reference to it
+                    file_obj = io.BytesIO(pdf_file)
+                    reader = PyPDF2.PdfReader(file_obj)
+            
+            # Extract text from all pages
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+                
+            # Close the file if we opened it
+            if file_obj:
+                file_obj.close()
+                
+            return text
+        except Exception as e:
+            print(f"Error extracting text from PDF: {e}")
+            raise ValueError(f"Failed to extract text from PDF: {e}")
     
     def identify_sections(self, resume_text):
         """
@@ -89,11 +111,19 @@ class ResumeParser:
             dict: A dictionary of identified sections with their content.
         """
         try:
-            result = self.section_id_chain.run(resume_text=resume_text)
+            # Use the prompt and LLM directly instead of LLMChain
+            chain = self.section_id_prompt | self.llm
+            result = chain.invoke({"resume_text": resume_text})
+            
             # Parse the JSON result
             import json
-            sections = json.loads(result)
-            return sections
+            try:
+                sections = json.loads(result)
+                return sections
+            except json.JSONDecodeError as json_err:
+                print(f"Error parsing JSON from LLM response: {json_err}")
+                print(f"Raw LLM response: {result[:500]}...")  # Print first 500 chars of response
+                return self._basic_section_identification(resume_text)
         except Exception as e:
             print(f"Error identifying sections: {e}")
             # Fallback to basic section identification
