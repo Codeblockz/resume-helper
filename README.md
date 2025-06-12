@@ -13,14 +13,14 @@ A tool to help job seekers tailor their resumes to specific job postings. This a
 ## Requirements
 
 - Python 3.9 or higher
-- Ollama with Llama 3 model installed
+- Ollama with Qwen3:32b model installed
 - Required Python packages (see requirements.txt)
 
 ## Installation
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/resume-helper.git
+   git clone https://github.com/Codeblockz/resume-helper.git
    cd resume-helper
    ```
 
@@ -40,13 +40,13 @@ A tool to help job seekers tailor their resumes to specific job postings. This a
    pip install -r requirements.txt
    ```
 
-4. Ensure Ollama is installed and the Llama 3 model is available:
+4. Ensure Ollama is installed and the Qwen3:32b model is available:
    ```
    # Check if Ollama is installed
    ollama --version
    
-   # Pull the Llama 3 model if not already available
-   ollama pull llama3
+   # Pull the Qwen3:32b model if not already available
+   ollama pull qwen3:32b
    ```
 
 ## Usage
