@@ -118,7 +118,38 @@ class ResumeParser:
             # Parse the JSON result
             import json
             try:
-                sections = json.loads(result)
+                # Clean the result to ensure it's valid JSON
+                # Sometimes LLMs add extra text before or after the JSON
+                result = result.strip()
+                
+                # Handle thinking process in the response
+                if "<think>" in result and "</think>" in result:
+                    # Extract content between thinking tags
+                    think_start = result.find("<think>")
+                    think_end = result.find("</think>", think_start) + len("</think>")
+                    # Remove the thinking part
+                    result = result[:think_start] + result[think_end:].strip()
+                
+                # If the result starts with a backtick (markdown code block), remove it
+                if result.startswith("```json"):
+                    result = result[7:].strip()
+                if result.startswith("```"):
+                    result = result[3:].strip()
+                if result.endswith("```"):
+                    result = result[:-3].strip()
+                
+                # Try to find JSON in the text - look for opening and closing braces
+                json_start = result.find('{')
+                json_end = result.rfind('}') + 1
+                
+                if json_start >= 0 and json_end > json_start:
+                    # Extract just the JSON part
+                    json_str = result[json_start:json_end]
+                    sections = json.loads(json_str)
+                else:
+                    # If no JSON found, create a fallback structure
+                    print("No valid JSON structure found in response")
+                    return self._basic_section_identification(resume_text)
                 return sections
             except json.JSONDecodeError as json_err:
                 print(f"Error parsing JSON from LLM response: {json_err}")
