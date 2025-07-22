@@ -2,148 +2,156 @@
 Job Description Analyzer module for Resume Helper.
 
 This module processes job posting text to identify key requirements and keywords.
-It uses Ollama for natural language processing and extraction.
+It uses Ollama for natural language processing with Pydantic for structured outputs.
 """
 
 from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
+from langchain.output_parsers import PydanticOutputParser
+
+from ..models.responses import JobRequirements
 
 
 class JobAnalyzer:
-    """Analyzer for processing job descriptions and extracting requirements."""
+    """Analyzer for processing job descriptions and extracting requirements with structured outputs."""
     
     def __init__(self, model_name="qwen3:32b"):
         """
-        Initialize the JobAnalyzer.
+        Initialize the JobAnalyzer with Pydantic output parsing.
         
         Args:
             model_name (str): Name of the Ollama model to use for analysis.
         """
         self.llm = OllamaLLM(model=model_name)
+        self.output_parser = PydanticOutputParser(pydantic_object=JobRequirements)
         
-        # Create prompt template for job description analysis
+        # Create prompt template for job description analysis with format instructions
         self.job_analysis_prompt = PromptTemplate(
-            input_variables=["job_description"],
             template="""
-            Analyze the following job description and extract:
-            1. Required skills
-            2. Preferred skills
-            3. Required experience
-            4. Required education
-            5. Key responsibilities
-            6. Important keywords that would be valuable to include in a resume
-
+            Analyze the following job description and extract structured requirements.
+            
+            {format_instructions}
+            
             Job Description:
             {job_description}
             
-            Return the analysis in JSON format as follows:
-            {{
-                "required_skills": ["skill1", "skill2", ...],
-                "preferred_skills": ["skill1", "skill2", ...],
-                "required_experience": ["experience1", "experience2", ...],
-                "required_education": ["education1", "education2", ...],
-                "responsibilities": ["responsibility1", "responsibility2", ...],
-                "keywords": ["keyword1", "keyword2", ...]
-            }}
+            Please extract:
+            1. Required skills - Essential technical and professional skills
+            2. Preferred skills - Nice-to-have skills that would be beneficial
+            3. Required experience - Work experience and background requirements
+            4. Required education - Educational qualifications and degrees
+            5. Key responsibilities - Main duties and responsibilities of the role
+            6. Important keywords - Keywords valuable for ATS optimization
             
-            Ensure all lists contain string items, not nested objects.
-            IMPORTANT: Return ONLY the JSON object, with no additional text, explanations, or thinking process.
-            """
+            Ensure all lists contain clear, specific string items.
+            """,
+            input_variables=["job_description"],
+            partial_variables={
+                "format_instructions": self.output_parser.get_format_instructions()
+            }
         )
     
-    def analyze_job_description(self, job_description_text):
+    def analyze_job_description(self, job_description_text: str) -> JobRequirements:
         """
-        Analyze a job description to extract requirements and keywords.
+        Analyze a job description to extract structured requirements using Pydantic.
         
         Args:
             job_description_text (str): The text content of the job description.
             
         Returns:
-            dict: A dictionary containing structured job requirements.
+            JobRequirements: A Pydantic model containing structured job requirements.
         """
         if not job_description_text or not job_description_text.strip():
             print("Warning: Empty job description provided")
-            return self._empty_requirements()
+            return JobRequirements()
             
         try:
-            # Use the prompt and LLM directly instead of LLMChain
-            chain = self.job_analysis_prompt | self.llm
+            # Create chain with structured output parsing
+            chain = self.job_analysis_prompt | self.llm | self.output_parser
+            
+            # Invoke chain with structured parsing
             result = chain.invoke({"job_description": job_description_text})
             
-            # Parse the JSON result
-            import json
-            try:
-                # Clean the result to ensure it's valid JSON
-                # Sometimes LLMs add extra text before or after the JSON
-                result = result.strip()
-                
-                # Handle thinking process in the response
-                if "<think>" in result and "</think>" in result:
-                    # Extract content between thinking tags
-                    think_start = result.find("<think>")
-                    think_end = result.find("</think>", think_start) + len("</think>")
-                    # Remove the thinking part
-                    result = result[:think_start] + result[think_end:].strip()
-                
-                # If the result starts with a backtick (markdown code block), remove it
-                if result.startswith("```json"):
-                    result = result[7:].strip()
-                if result.startswith("```"):
-                    result = result[3:].strip()
-                if result.endswith("```"):
-                    result = result[:-3].strip()
-                
-                # Try to find JSON in the text - look for opening and closing braces
-                json_start = result.find('{')
-                json_end = result.rfind('}') + 1
-                
-                if json_start >= 0 and json_end > json_start:
-                    # Extract just the JSON part
-                    json_str = result[json_start:json_end]
-                    requirements = json.loads(json_str)
-                else:
-                    # If no JSON found, create a fallback structure
-                    print("No valid JSON structure found in response")
-                    return self._empty_requirements()
-                
-                # Validate the structure of the requirements
-                expected_keys = ["required_skills", "preferred_skills", "required_experience", 
-                                "required_education", "responsibilities", "keywords"]
-                for key in expected_keys:
-                    if key not in requirements:
-                        print(f"Warning: Missing '{key}' in job requirements")
-                        requirements[key] = []
-                    elif not isinstance(requirements[key], list):
-                        print(f"Warning: '{key}' is not a list in job requirements")
-                        requirements[key] = [str(requirements[key])] if requirements[key] else []
-                
-                return requirements
-            except json.JSONDecodeError as json_err:
-                print(f"Error parsing JSON from LLM response: {json_err}")
-                print(f"Raw LLM response: {result[:500]}...")  # Print first 500 chars of response
-                return self._empty_requirements()
+            # Return the validated Pydantic model
+            return result
+            
+        except Exception as parse_err:
+            print(f"Error parsing structured output: {parse_err}")
+            # Fall back to manual parsing
+            return self._fallback_parse(job_description_text)
         except Exception as e:
             print(f"Error analyzing job description: {e}")
             # Return empty structure as fallback
-            return self._empty_requirements()
+            return JobRequirements()
     
-    def _empty_requirements(self):
+    def _fallback_parse(self, job_description_text: str) -> JobRequirements:
         """
-        Create an empty requirements structure as fallback.
+        Fallback method using traditional parsing if Pydantic parsing fails.
         
+        Args:
+            job_description_text (str): The job description text.
+            
         Returns:
-            dict: An empty requirements dictionary.
+            JobRequirements: Parsed requirements using fallback method.
         """
-        return {
-            "required_skills": [],
-            "preferred_skills": [],
-            "required_experience": [],
-            "required_education": [],
-            "responsibilities": [],
-            "keywords": []
-        }
+        try:
+            # Use simpler prompt for fallback
+            simple_prompt = PromptTemplate(
+                input_variables=["job_description"],
+                template="""
+                Analyze this job description and extract requirements in JSON format:
+                {job_description}
+                
+                Return JSON with keys: required_skills, preferred_skills, required_experience, 
+                required_education, responsibilities, keywords
+                """
+            )
+            
+            chain = simple_prompt | self.llm
+            result = chain.invoke({"job_description": job_description_text})
+            
+            # Manual JSON parsing with validation
+            import json
+            result = result.strip()
+            
+            # Clean up common LLM formatting
+            if "```json" in result:
+                result = result.split("```json")[1].split("```")[0]
+            elif "```" in result:
+                result = result.split("```")[1].split("```")[0]
+            
+            # Find JSON bounds
+            json_start = result.find('{')
+            json_end = result.rfind('}') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                json_str = result[json_start:json_end]
+                data = json.loads(json_str)
+                
+                # Validate and create JobRequirements
+                return JobRequirements(**data)
+            else:
+                print("No valid JSON found in fallback parsing")
+                return JobRequirements()
+                
+        except Exception as e:
+            print(f"Fallback parsing failed: {e}")
+            return JobRequirements()
     
-    def extract_keywords(self, job_description_text):
+    def analyze_job_description_legacy(self, job_description_text: str) -> dict:
+        """
+        Legacy method that returns a dictionary for backward compatibility.
+        
+        Args:
+            job_description_text (str): The job description text.
+            
+        Returns:
+            dict: Dictionary representation of job requirements.
+        """
+        requirements = self.analyze_job_description(job_description_text)
+        return requirements.model_dump()
+    
+    def extract_keywords(self, job_description_text: str) -> list:
         """
         Extract just the keywords from a job description.
         
@@ -154,7 +162,7 @@ class JobAnalyzer:
             list: A list of important keywords from the job description.
         """
         requirements = self.analyze_job_description(job_description_text)
-        return requirements.get("keywords", [])
+        return requirements.keywords
 
 
 # Example usage
@@ -189,9 +197,33 @@ if __name__ == "__main__":
     # Analyze job description
     requirements = analyzer.analyze_job_description(job_description)
     
-    # Print requirements
-    for category, items in requirements.items():
-        print(f"=== {category.replace('_', ' ').title()} ===")
-        for item in items:
-            print(f"- {item}")
-        print()
+    # Print requirements using Pydantic model
+    print("=== Required Skills ===")
+    for skill in requirements.required_skills:
+        print(f"- {skill}")
+    print()
+    
+    print("=== Preferred Skills ===")
+    for skill in requirements.preferred_skills:
+        print(f"- {skill}")
+    print()
+    
+    print("=== Required Experience ===")
+    for exp in requirements.required_experience:
+        print(f"- {exp}")
+    print()
+    
+    print("=== Required Education ===")
+    for edu in requirements.required_education:
+        print(f"- {edu}")
+    print()
+    
+    print("=== Responsibilities ===")
+    for resp in requirements.responsibilities:
+        print(f"- {resp}")
+    print()
+    
+    print("=== Keywords ===")
+    for keyword in requirements.keywords:
+        print(f"- {keyword}")
+    print()
