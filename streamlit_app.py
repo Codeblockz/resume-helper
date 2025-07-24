@@ -1,343 +1,486 @@
 """
 Resume Helper - Streamlit Web Application
 
-A modern web-based tool to help job seekers tailor their resumes to specific job postings.
-This application provides an intuitive interface for uploading resumes, analyzing job descriptions,
-and generating tailored recommendations with interactive visualizations.
+A modern web interface for the Resume Helper tool that allows job seekers
+to tailor their resumes to specific job postings using AI-powered analysis.
 """
 
 import streamlit as st
-import time
-import sys
 import os
-from pathlib import Path
+import sys
+from typing import Optional, Dict, Any
+import json
 
-# Add the project root to the path for imports
-sys.path.append(str(Path(__file__).parent))
+# Add the app directory to the path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Import our enhanced components
+# Import our modules
+from app.parser.pdf_parser import ResumeParser
 from app.analyzer.job_analyzer import JobAnalyzer
-from app.models.responses import JobRequirements, ResumeData
+from app.comparison.matcher import ResumeMatcher
+from app.recommendation.generator import RecommendationGenerator
 
-# Configure the Streamlit page
+# Page configuration
 st.set_page_config(
     page_title="Resume Helper",
     page_icon="📄",
     layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'About': "# Resume Helper\nTailor your resume to match job descriptions with AI-powered analysis!"
-    }
+    initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+# Custom CSS
 st.markdown("""
 <style>
-    .main-header {
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #1f77b4;
         text-align: center;
-        padding: 2rem 0;
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 10px;
+        margin-bottom: 0.5rem;
+    }
+    .subtitle {
+        font-size: 1.2rem;
+        color: #666;
+        text-align: center;
         margin-bottom: 2rem;
     }
     .metric-card {
-        background: #f8f9fa;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 1rem;
         border-radius: 10px;
-        border-left: 4px solid #667eea;
-        margin: 0.5rem 0;
+        color: white;
+        text-align: center;
+        margin: 1rem 0;
     }
-    .recommendation-card {
-        background: white;
+    .success-box {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 5px;
         padding: 1rem;
-        border-radius: 8px;
-        border: 1px solid #dee2e6;
-        margin: 0.5rem 0;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin: 1rem 0;
     }
-    .priority-high {
-        border-left: 4px solid #dc3545;
-    }
-    .priority-medium {
-        border-left: 4px solid #ffc107;
-    }
-    .priority-low {
-        border-left: 4px solid #28a745;
+    .warning-box {
+        background-color: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 5px;
+        padding: 1rem;
+        margin: 1rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-
-def init_session_state():
-    """Initialize Streamlit session state variables."""
-    if 'analyzer' not in st.session_state:
-        st.session_state.analyzer = JobAnalyzer()
+# Initialize session state
+def initialize_session_state():
+    """Initialize session state variables."""
     if 'job_requirements' not in st.session_state:
         st.session_state.job_requirements = None
     if 'resume_data' not in st.session_state:
         st.session_state.resume_data = None
+    if 'comparison_results' not in st.session_state:
+        st.session_state.comparison_results = None
+    if 'recommendations' not in st.session_state:
+        st.session_state.recommendations = None
     if 'analysis_complete' not in st.session_state:
         st.session_state.analysis_complete = False
 
+# Initialize components
+@st.cache_resource
+def get_components():
+    """Initialize and cache the application components."""
+    return {
+        'parser': ResumeParser(),
+        'analyzer': JobAnalyzer(),
+        'matcher': ResumeMatcher(),
+        'generator': RecommendationGenerator()
+    }
 
 def main():
-    """Main Streamlit application function."""
-    init_session_state()
+    """Main application function."""
+    initialize_session_state()
+    components = get_components()
     
-    # Header
-    st.markdown("""
-    <div class="main-header">
-        <h1>📄 Resume Helper</h1>
-        <p>Tailor your resume to match job descriptions with AI-powered analysis</p>
-    </div>
-    """, unsafe_allow_html=True)
+    # Title and header
+    st.markdown('<h1 class="main-title">📄 Resume Helper</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="subtitle">Tailor your resume to match job descriptions using AI-powered analysis</p>', unsafe_allow_html=True)
     
-    # Sidebar for navigation and controls
-    with st.sidebar:
-        st.header("Navigation")
-        page = st.radio(
-            "Choose a section:",
-            ["📊 Analysis", "📝 Job Requirements", "🎯 Resume Upload", "⚙️ Settings"]
-        )
-        
-        st.divider()
-        
-        # Quick stats if analysis is complete
-        if st.session_state.analysis_complete:
-            st.success("✅ Analysis Complete!")
-            if st.session_state.job_requirements:
-                st.metric("Required Skills", len(st.session_state.job_requirements.required_skills))
-                st.metric("Preferred Skills", len(st.session_state.job_requirements.preferred_skills))
-                st.metric("Keywords", len(st.session_state.job_requirements.keywords))
+    # Sidebar navigation
+    st.sidebar.title("Navigation")
+    page = st.sidebar.radio(
+        "Choose a section:",
+        ["📊 Analysis", "📝 Job Requirements", "🎯 Resume Upload", "⚙️ Settings"]
+    )
     
-    # Main content area based on selected page
+    # Main content based on selected page
     if page == "📊 Analysis":
         show_analysis_page()
     elif page == "📝 Job Requirements":
-        show_job_requirements_page()
+        show_job_requirements_page(components['analyzer'])
     elif page == "🎯 Resume Upload":
-        show_resume_upload_page()
+        show_resume_upload_page(components['parser'])
     elif page == "⚙️ Settings":
         show_settings_page()
 
+def show_analysis_page():
+    """Display the main analysis dashboard."""
+    st.header("📊 Analysis Dashboard")
+    
+    if not st.session_state.analysis_complete:
+        st.info("👈 Please complete the job requirements and resume upload sections first.")
+        
+        # Show current status
+        col1, col2 = st.columns(2)
+        with col1:
+            job_status = "✅ Complete" if st.session_state.job_requirements else "❌ Pending"
+            st.metric("Job Analysis", job_status)
+        with col2:
+            resume_status = "✅ Complete" if st.session_state.resume_data else "❌ Pending"
+            st.metric("Resume Upload", resume_status)
+        
+        return
+    
+    # Display analysis results
+    if st.session_state.comparison_results and st.session_state.recommendations:
+        # Match score display
+        match_score = st.session_state.comparison_results.get("match_score", 0)
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Match Score", f"{match_score}%")
+        with col2:
+            matches_count = len(st.session_state.comparison_results.get("matches", []))
+            st.metric("Matches Found", matches_count)
+        with col3:
+            gaps_count = len(st.session_state.comparison_results.get("gaps", []))
+            st.metric("Areas to Improve", gaps_count)
+        
+        # Results tabs
+        tab1, tab2, tab3 = st.tabs(["📋 Summary", "✅ Matches", "⚠️ Gaps"])
+        
+        with tab1:
+            st.subheader("Summary")
+            summary = st.session_state.recommendations.get("summary", "No summary available.")
+            st.markdown(summary)
+            
+            st.subheader("Recommendations")
+            recommendations = st.session_state.recommendations.get("recommendations", [])
+            
+            for i, rec in enumerate(recommendations, 1):
+                priority = rec.get("priority", 0)
+                section = rec.get("section", "")
+                rec_type = rec.get("type", "")
+                content = rec.get("content", "")
+                reason = rec.get("reason", "")
+                
+                with st.expander(f"{i}. {section} ({rec_type}) - Priority: {priority}"):
+                    st.write(f"**Recommendation:** {content}")
+                    st.write(f"**Reason:** {reason}")
+            
+            # Keyword suggestions
+            if "keyword_suggestions" in st.session_state.recommendations:
+                st.subheader("Suggested Keywords")
+                keywords = st.session_state.recommendations["keyword_suggestions"]
+                if keywords:
+                    st.write("Consider adding these keywords to your resume:")
+                    for keyword in keywords:
+                        st.write(f"• {keyword}")
+        
+        with tab2:
+            st.subheader("Matching Elements")
+            matches = st.session_state.comparison_results.get("matches", [])
+            
+            if matches:
+                for match in matches:
+                    category = match.get("category", "").replace("_", " ").title()
+                    item = match.get("item", "")
+                    where_found = match.get("where_found", "")
+                    
+                    st.success(f"**{category}:** {item}")
+                    st.caption(f"Found in: {where_found}")
+            else:
+                st.info("No specific matches found.")
+        
+        with tab3:
+            st.subheader("Areas for Improvement")
+            gaps = st.session_state.comparison_results.get("gaps", [])
+            
+            if gaps:
+                for gap in gaps:
+                    category = gap.get("category", "").replace("_", " ").title()
+                    item = gap.get("item", "")
+                    suggestion = gap.get("suggestion", "")
+                    
+                    st.warning(f"**{category}:** {item}")
+                    st.caption(f"Suggestion: {suggestion}")
+            else:
+                st.success("Great! No significant gaps identified.")
 
-def show_job_requirements_page():
+def show_job_requirements_page(analyzer):
     """Display the job requirements analysis page."""
-    st.header("📝 Job Description Analysis")
-    st.write("Enter a job description to analyze its requirements and extract key information.")
+    st.header("📝 Job Requirements Analysis")
+    
+    st.write("Paste the job description below and click 'Analyze' to extract key requirements.")
     
     # Job description input
     job_description = st.text_area(
         "Job Description",
-        placeholder="Paste the job description here...",
         height=300,
-        help="Enter the complete job description including requirements, responsibilities, and qualifications."
+        placeholder="Paste the full job description here..."
     )
     
-    # Analysis button and processing
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        analyze_button = st.button("🔍 Analyze Job", type="primary")
     with col2:
-        analyze_button = st.button("🔍 Analyze Job Description", use_container_width=True)
+        if st.session_state.job_requirements:
+            st.success("✅ Job analysis complete!")
     
     if analyze_button and job_description.strip():
         with st.spinner("Analyzing job description..."):
             try:
-                # Analyze the job description
-                progress_bar = st.progress(0)
-                progress_bar.progress(25, "Initializing analysis...")
+                # Analyze job description
+                job_requirements = analyzer.analyze_job_description(job_description)
+                st.session_state.job_requirements = job_requirements
                 
-                time.sleep(0.5)  # Simulate processing time
-                progress_bar.progress(50, "Extracting requirements...")
+                # Check if we have both job and resume data for full analysis
+                if st.session_state.resume_data:
+                    perform_full_analysis()
                 
-                requirements = st.session_state.analyzer.analyze_job_description(job_description)
-                
-                progress_bar.progress(75, "Structuring results...")
-                time.sleep(0.5)
-                
-                # Store results in session state
-                st.session_state.job_requirements = requirements
-                progress_bar.progress(100, "Analysis complete!")
-                time.sleep(0.5)
-                progress_bar.empty()
-                
-                st.success("✅ Job description analyzed successfully!")
-                
-                # Display results
-                display_job_analysis_results(requirements)
+                st.success("✅ Job analysis completed successfully!")
+                st.rerun()
                 
             except Exception as e:
                 st.error(f"❌ Error analyzing job description: {str(e)}")
     
-    elif analyze_button and not job_description.strip():
-        st.warning("⚠️ Please enter a job description to analyze.")
-    
-    # Display existing results if available
-    elif st.session_state.job_requirements:
-        st.info("📋 Showing previously analyzed job description")
-        display_job_analysis_results(st.session_state.job_requirements)
-
-
-def display_job_analysis_results(requirements: JobRequirements):
-    """Display the job analysis results in a structured format."""
-    st.subheader("🎯 Analysis Results")
-    
-    # Create tabs for different sections
-    tab1, tab2, tab3, tab4 = st.tabs(["Skills", "Experience & Education", "Responsibilities", "Keywords"])
-    
-    with tab1:
-        col1, col2 = st.columns(2)
+    # Display job requirements if available
+    if st.session_state.job_requirements:
+        st.subheader("📊 Analysis Results")
         
-        with col1:
-            st.markdown("#### 🔴 Required Skills")
-            if requirements.required_skills:
-                for skill in requirements.required_skills:
-                    st.markdown(f"• {skill}")
+        job_req = st.session_state.job_requirements
+        
+        # Create tabs for different aspects
+        tab1, tab2, tab3, tab4 = st.tabs(["🎯 Skills", "📚 Experience", "🎓 Qualifications", "🔑 Keywords"])
+        
+        with tab1:
+            required_skills = job_req.required_skills if hasattr(job_req, 'required_skills') else []
+            preferred_skills = job_req.preferred_skills if hasattr(job_req, 'preferred_skills') else []
+            
+            if required_skills:
+                st.write("**Required Skills:**")
+                for skill in required_skills:
+                    st.write(f"• {skill}")
+            
+            if preferred_skills:
+                st.write("**Preferred Skills:**")
+                for skill in preferred_skills:
+                    st.write(f"• {skill}")
+        
+        with tab2:
+            experience = job_req.required_experience if hasattr(job_req, 'required_experience') else []
+            if experience:
+                for exp in experience:
+                    st.write(f"• {exp}")
             else:
-                st.info("No required skills identified")
+                st.info("No specific experience requirements identified.")
         
-        with col2:
-            st.markdown("#### 🟡 Preferred Skills")
-            if requirements.preferred_skills:
-                for skill in requirements.preferred_skills:
-                    st.markdown(f"• {skill}")
+        with tab3:
+            qualifications = job_req.required_education if hasattr(job_req, 'required_education') else []
+            if qualifications:
+                for qual in qualifications:
+                    st.write(f"• {qual}")
             else:
-                st.info("No preferred skills identified")
-    
-    with tab2:
-        col1, col2 = st.columns(2)
+                st.info("No specific qualifications identified.")
         
-        with col1:
-            st.markdown("#### 💼 Required Experience")
-            if requirements.required_experience:
-                for exp in requirements.required_experience:
-                    st.markdown(f"• {exp}")
+        with tab4:
+            keywords = job_req.keywords if hasattr(job_req, 'keywords') else []
+            if keywords:
+                # Display keywords as tags
+                st.write("**Key Terms:**")
+                keyword_text = " • ".join(keywords)
+                st.write(keyword_text)
             else:
-                st.info("No specific experience requirements identified")
-        
-        with col2:
-            st.markdown("#### 🎓 Required Education")
-            if requirements.required_education:
-                for edu in requirements.required_education:
-                    st.markdown(f"• {edu}")
-            else:
-                st.info("No specific education requirements identified")
-    
-    with tab3:
-        st.markdown("#### 📋 Key Responsibilities")
-        if requirements.responsibilities:
-            for i, resp in enumerate(requirements.responsibilities, 1):
-                st.markdown(f"{i}. {resp}")
-        else:
-            st.info("No specific responsibilities identified")
-    
-    with tab4:
-        st.markdown("#### 🔍 ATS Keywords")
-        if requirements.keywords:
-            # Display keywords as tags
-            keyword_cols = st.columns(4)
-            for i, keyword in enumerate(requirements.keywords):
-                with keyword_cols[i % 4]:
-                    st.markdown(f"<span style='background-color: #e1f5fe; padding: 4px 8px; border-radius: 12px; margin: 2px; display: inline-block;'>{keyword}</span>", 
-                               unsafe_allow_html=True)
-        else:
-            st.info("No specific keywords identified")
+                st.info("No specific keywords identified.")
 
-
-def show_analysis_page():
-    """Display the main analysis dashboard."""
-    st.header("📊 Resume Analysis Dashboard")
-    
-    if not st.session_state.job_requirements:
-        st.warning("⚠️ Please analyze a job description first in the 'Job Requirements' section.")
-        st.info("💡 Start by pasting a job description to extract requirements and keywords.")
-    else:
-        st.success("✅ Job requirements loaded! Upload a resume to begin comparison.")
-        
-        # Display quick overview
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Required Skills", len(st.session_state.job_requirements.required_skills))
-        
-        with col2:
-            st.metric("Preferred Skills", len(st.session_state.job_requirements.preferred_skills))
-        
-        with col3:
-            st.metric("Experience Items", len(st.session_state.job_requirements.required_experience))
-        
-        with col4:
-            st.metric("Keywords", len(st.session_state.job_requirements.keywords))
-        
-        st.info("🎯 Next: Upload your resume in the 'Resume Upload' section to see how well it matches!")
-
-
-def show_resume_upload_page():
-    """Display the resume upload and parsing page."""
+def show_resume_upload_page(parser):
+    """Display the resume upload page."""
     st.header("🎯 Resume Upload & Analysis")
-    st.write("Upload your resume (PDF format) to analyze how well it matches the job requirements.")
     
-    if not st.session_state.job_requirements:
-        st.warning("⚠️ Please analyze a job description first to enable resume comparison.")
-        return
+    st.write("Upload your resume PDF to analyze its content and structure.")
     
     # File upload
     uploaded_file = st.file_uploader(
-        "Choose your resume file",
+        "Choose your resume PDF",
         type=['pdf'],
-        help="Upload a PDF resume file for analysis"
+        help="Upload a PDF version of your resume"
     )
     
     if uploaded_file is not None:
-        st.success(f"✅ Resume uploaded: {uploaded_file.name}")
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            process_button = st.button("📄 Process Resume", type="primary")
+        with col2:
+            if st.session_state.resume_data:
+                st.success("✅ Resume processed!")
         
-        # Display file info
-        st.info(f"📄 File size: {uploaded_file.size:,} bytes")
-        
-        # Process button
-        if st.button("🔍 Analyze Resume Match", use_container_width=True):
+        if process_button:
             with st.spinner("Processing resume..."):
-                st.info("🚧 Resume processing functionality coming soon!")
-                st.write("This will include:")
-                st.write("• PDF text extraction")
-                st.write("• Resume section identification") 
-                st.write("• Skills and experience matching")
-                st.write("• Gap analysis and recommendations")
-                st.write("• Match score calculation")
+                try:
+                    # Save uploaded file temporarily
+                    temp_path = f"temp_{uploaded_file.name}"
+                    with open(temp_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    
+                    # Parse resume
+                    resume_data = parser.parse_resume(temp_path)
+                    st.session_state.resume_data = resume_data
+                    
+                    # Clean up temp file
+                    os.remove(temp_path)
+                    
+                    # Check if we have both job and resume data for full analysis
+                    if st.session_state.job_requirements:
+                        perform_full_analysis()
+                    
+                    st.success("✅ Resume processed successfully!")
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"❌ Error processing resume: {str(e)}")
+                    if os.path.exists(temp_path):
+                        os.remove(temp_path)
+    
+    # Display resume data if available
+    if st.session_state.resume_data:
+        st.subheader("📊 Resume Analysis")
+        
+        resume_data = st.session_state.resume_data
+        
+        # Basic info - handle both Pydantic and dict formats
+        col1, col2 = st.columns(2)
+        with col1:
+            if hasattr(resume_data, 'raw_text'):
+                word_count = len(resume_data.raw_text.split())
+            else:
+                word_count = len(resume_data.get("raw_text", "").split())
+            st.metric("Total Words", word_count)
+        with col2:
+            if hasattr(resume_data, 'sections'):
+                if hasattr(resume_data.sections, 'model_dump'):
+                    sections_count = len([k for k, v in resume_data.sections.model_dump().items() if v])
+                else:
+                    sections_count = len(resume_data.sections.to_dict())
+            else:
+                sections_count = len(resume_data.get("sections", {}))
+            st.metric("Sections Found", sections_count)
+        
+        # Sections
+        st.subheader("📋 Resume Sections")
+        
+        # Handle both Pydantic and dict formats
+        if hasattr(resume_data, 'sections'):
+            if hasattr(resume_data.sections, 'model_dump'):
+                sections = resume_data.sections.model_dump()
+            else:
+                sections = resume_data.sections.to_dict()
+        else:
+            sections = resume_data.get("sections", {})
+        
+        for section_name, section_content in sections.items():
+            if section_content:  # Only show non-empty sections
+                with st.expander(f"{section_name.replace('_', ' ').title()}"):
+                    st.write(section_content)
 
+def perform_full_analysis():
+    """Perform full analysis when both job and resume data are available."""
+    if not st.session_state.job_requirements or not st.session_state.resume_data:
+        return
+    
+    try:
+        components = get_components()
+        
+        # Compare resume to job
+        comparison_results = components['matcher'].compare_resume_to_job(
+            st.session_state.resume_data,
+            st.session_state.job_requirements
+        )
+        st.session_state.comparison_results = comparison_results
+        
+        # Generate recommendations - handle both Pydantic and dict formats
+        if hasattr(st.session_state.resume_data, 'raw_text'):
+            resume_text = st.session_state.resume_data.raw_text
+        else:
+            resume_text = st.session_state.resume_data.get("raw_text", "")
+            
+        recommendations = components['generator'].generate_recommendations(
+            resume_text,
+            "",  # We already have job requirements analyzed
+            comparison_results
+        )
+        st.session_state.recommendations = recommendations
+        
+        # Mark as complete
+        st.session_state.analysis_complete = True
+        
+    except Exception as e:
+        st.error(f"❌ Error during analysis: {str(e)}")
 
 def show_settings_page():
-    """Display the application settings page."""
+    """Display the settings page."""
     st.header("⚙️ Settings")
     
-    st.subheader("🤖 AI Model Configuration")
-    current_model = st.selectbox(
-        "Ollama Model",
-        ["qwen3:32b", "llama3", "mistral", "codellama"],
-        index=0,
+    # Model configuration
+    st.subheader("🤖 Model Configuration")
+    
+    model_name = st.selectbox(
+        "LLM Model",
+        ["llama3.2", "llama2", "codellama", "mistral"],
         help="Select the Ollama model to use for analysis"
     )
     
-    if current_model != "qwen3:32b":
-        st.warning("⚠️ Changing the model will require restarting the analysis.")
+    temperature = st.slider(
+        "Temperature",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.1,
+        step=0.1,
+        help="Controls randomness in model responses"
+    )
     
-    st.subheader("📊 Display Options")
-    show_debug = st.checkbox("Show debug information", value=False)
-    show_raw_data = st.checkbox("Show raw analysis data", value=False)
+    # Data management
+    st.subheader("🗂️ Data Management")
     
-    st.subheader("🔄 Reset Options")
-    if st.button("🗑️ Clear All Data", type="secondary"):
-        # Clear session state
-        for key in ['job_requirements', 'resume_data', 'analysis_complete']:
-            if key in st.session_state:
-                del st.session_state[key]
-        st.success("✅ All data cleared!")
-        st.rerun()
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🗑️ Clear All Data"):
+            st.session_state.clear()
+            initialize_session_state()
+            st.success("✅ All data cleared!")
+            st.rerun()
     
-    if show_debug and st.session_state.job_requirements:
-        st.subheader("🐛 Debug Information")
-        st.json(st.session_state.job_requirements.model_dump())
-
+    with col2:
+        if st.button("📊 Show Debug Info"):
+            st.subheader("Debug Information")
+            st.json({
+                "job_requirements_loaded": st.session_state.job_requirements is not None,
+                "resume_data_loaded": st.session_state.resume_data is not None,
+                "analysis_complete": st.session_state.analysis_complete,
+                "session_keys": list(st.session_state.keys())
+            })
+    
+    # About
+    st.subheader("ℹ️ About")
+    st.markdown("""
+    **Resume Helper** is an AI-powered tool that helps job seekers tailor their resumes 
+    to specific job postings. It uses local processing to maintain privacy and provides 
+    specific, actionable recommendations.
+    
+    **Features:**
+    - PDF resume parsing and analysis
+    - Job description requirement extraction
+    - Resume-job matching with scoring
+    - Specific tailoring recommendations
+    - Keyword suggestions
+    - Privacy-focused local processing
+    """)
 
 if __name__ == "__main__":
     main()

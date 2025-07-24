@@ -69,19 +69,29 @@ class ResumeMatcher:
         Compare resume content to job requirements.
         
         Args:
-            resume_data (dict): Structured resume data with sections.
-            job_requirements (dict): Structured job requirements.
+            resume_data (dict or ResumeData): Structured resume data with sections.
+            job_requirements (dict or JobRequirements): Structured job requirements.
             
         Returns:
             dict: Comparison results with matches, gaps, and scores.
         """
-        # Validate inputs
-        if not resume_data or not isinstance(resume_data, dict):
-            print("Warning: Invalid resume data provided")
+        # Validate inputs - accept both dict and Pydantic models
+        if not resume_data:
+            print("Warning: No resume data provided")
             return self._basic_comparison_result()
             
-        if not job_requirements or not isinstance(job_requirements, dict):
-            print("Warning: Invalid job requirements provided")
+        # Check if it's a Pydantic model or dict
+        if not (isinstance(resume_data, dict) or hasattr(resume_data, 'sections')):
+            print("Warning: Invalid resume data format")
+            return self._basic_comparison_result()
+            
+        if not job_requirements:
+            print("Warning: No job requirements provided")
+            return self._basic_comparison_result()
+            
+        # Check if it's a Pydantic model or dict
+        if not (isinstance(job_requirements, dict) or hasattr(job_requirements, 'model_dump')):
+            print("Warning: Invalid job requirements format")
             return self._basic_comparison_result()
             
         try:
@@ -172,16 +182,31 @@ class ResumeMatcher:
         Format resume sections for the comparison prompt.
         
         Args:
-            resume_data (dict): Structured resume data.
+            resume_data (dict or ResumeData): Structured resume data.
             
         Returns:
             str: Formatted string representation of resume sections.
         """
-        sections = resume_data.get("sections", {})
-        formatted = ""
+        # Handle both dictionary and Pydantic model formats
+        if hasattr(resume_data, 'sections'):
+            # It's a Pydantic ResumeData model
+            if hasattr(resume_data.sections, 'model_dump'):
+                sections = resume_data.sections.model_dump()
+            else:
+                # Fallback - convert to dict manually
+                sections = {
+                    field: getattr(resume_data.sections, field) 
+                    for field in resume_data.sections.__fields__
+                    if getattr(resume_data.sections, field) is not None
+                }
+        else:
+            # It's a dictionary
+            sections = resume_data.get("sections", {})
         
+        formatted = ""
         for section_name, content in sections.items():
-            formatted += f"=== {section_name} ===\n{content}\n\n"
+            if content:  # Only include non-empty sections
+                formatted += f"=== {section_name} ===\n{content}\n\n"
         
         return formatted
     
@@ -190,18 +215,28 @@ class ResumeMatcher:
         Format job requirements for the comparison prompt.
         
         Args:
-            job_requirements (dict): Structured job requirements.
+            job_requirements (dict or JobRequirements): Structured job requirements.
             
         Returns:
             str: Formatted string representation of job requirements.
         """
-        formatted = ""
+        # Handle both dictionary and Pydantic model formats
+        if hasattr(job_requirements, 'model_dump'):
+            # It's a Pydantic JobRequirements model
+            requirements_dict = job_requirements.model_dump()
+        else:
+            # It's a dictionary
+            requirements_dict = job_requirements
         
-        for category, items in job_requirements.items():
+        formatted = ""
+        for category, items in requirements_dict.items():
             if items:  # Only include non-empty categories
                 formatted += f"=== {category.replace('_', ' ').title()} ===\n"
-                for item in items:
-                    formatted += f"- {item}\n"
+                if isinstance(items, list):
+                    for item in items:
+                        formatted += f"- {item}\n"
+                else:
+                    formatted += f"- {items}\n"
                 formatted += "\n"
         
         return formatted
