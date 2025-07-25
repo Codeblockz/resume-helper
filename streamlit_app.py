@@ -107,7 +107,7 @@ def main():
     st.sidebar.title("Navigation")
     page = st.sidebar.radio(
         "Choose a section:",
-        ["📊 Analysis", "📝 Job Requirements", "🎯 Resume Upload", "⚙️ Settings"]
+        ["📊 Analysis", "📝 Job Requirements", "🎯 Resume Upload", "🛠️ Editor", "⚙️ Settings"]
     )
     
     # Main content based on selected page
@@ -117,8 +117,193 @@ def main():
         show_job_requirements_page(components['analyzer'])
     elif page == "🎯 Resume Upload":
         show_resume_upload_page(components['parser'])
+    elif page == "🛠️ Editor":
+        show_editor_page()
     elif page == "⚙️ Settings":
         show_settings_page()
+
+def show_editor_page():
+    """Display the resume editor page."""
+    st.header("🛠️ Resume Editor")
+
+    # Check if we have resume data
+    if not st.session_state.resume_data:
+        st.warning("Please upload and process a resume first before using the editor.")
+        return
+
+    # Import editor components
+    from app.editor import EditableResume, EditableResumeSection, ResumeEditor
+
+    # Initialize editor if not already in session state
+    if 'editable_resume' not in st.session_state:
+        try:
+            editor = ResumeEditor()
+            editable_resume = editor.create_from_resume_data(st.session_state.resume_data)
+            st.session_state.editable_resume = editable_resume
+        except Exception as e:
+            st.error(f"❌ Error initializing resume editor: {str(e)}")
+            return
+
+    # Display current status
+    editable_resume = st.session_state.editable_resume
+
+    st.subheader("📋 Current Resume Sections")
+
+    # Show sections with edit forms
+    section_names = list(editable_resume.sections.keys())
+    if not section_names:
+        st.info("No sections found in resume. Please process a valid resume first.")
+        return
+
+    # Sidebar for navigation between sections
+    selected_section = st.sidebar.selectbox(
+        "Select section to edit:",
+        section_names,
+        index=0
+    )
+
+    # Display the selected section with editing controls
+    st.subheader(f"📝 Editing: {selected_section}")
+
+    section_data = editable_resume.sections[selected_section]
+
+    # Display current content
+    st.markdown(f"**Current Content:**")
+    st.code(section_data.content, language="text")
+
+    # Form for editing the section content
+    new_content = st.text_area(
+        "Edit Section Content",
+        value=section_data.content,
+        height=200,
+        help="Modify the content of this resume section"
+    )
+
+    # Buttons for actions
+    col1, col2, col3 = st.columns([1, 1, 1])
+
+    with col1:
+        if st.button("💾 Save Changes"):
+            try:
+                section_data.apply_change(new_content)
+                st.success(f"✅ Section '{selected_section}' updated successfully!")
+            except Exception as e:
+                st.error(f"❌ Error saving changes: {str(e)}")
+
+    with col2:
+        if len(section_data.edit_history) > 0:
+            version = st.number_input(
+                "Select version to revert to",
+                min_value=0,
+                max_value=len(section_data.edit_history)-1,
+                step=1,
+                value=len(section_data.edit_history)-1
+            )
+            if st.button("⏮️ Revert"):
+                try:
+                    section_data.revert_to(version)
+                    st.success(f"✅ Reverted {selected_section} to version {version}")
+                except Exception as e:
+                    st.error(f"❌ Error reverting: {str(e)}")
+
+    with col3:
+        if st.button("📄 Format"):
+            try:
+                formatted = section_data.format_for_display()
+                st.markdown(f"**Formatted Preview:**")
+                st.code(formatted, language="text")
+            except Exception as e:
+                st.error(f"❌ Error formatting: {str(e)}")
+
+    # Display edit history if available
+    if section_data.edit_history:
+        st.subheader("🕒 Edit History")
+
+        for i, change in enumerate(section_data.edit_history):
+            try:
+                change_data = eval(change)
+                timestamp = change_data.get("timestamp", "Unknown")
+                previous = change_data.get("previous", "")
+                current = change_data.get("current", "")
+
+                with st.expander(f"Version {len(section_data.edit_history) - i} ({timestamp})"):
+                    st.write(f"**Before:** {previous}")
+                    st.write(f"**After:**  {current}")
+
+            except Exception as e:
+                st.warning(f"Could not parse edit history entry: {str(e)}")
+
+    # Display recommendations that apply to this section
+    if st.session_state.recommendations and 'recommendations' in st.session_state.recommendations:
+        st.subheader("💡 Recommendations for This Section")
+        
+        recs = st.session_state.recommendations['recommendations']
+        section_recs = []
+
+        # Find recommendations for this section
+        for rec in recs:
+            if rec.get('section', '').lower() == selected_section.lower():
+                section_recs.append(rec)
+
+        if section_recs:
+            for i, rec in enumerate(section_recs):
+                priority = rec.get('priority', 0)
+                rec_type = rec.get('type', '')
+                content = rec.get('content', '')
+                reason = rec.get('reason', '')
+
+                with st.expander(f"Recommendation {i+1} - Priority: {priority}"):
+                    col_a, col_b, col_c = st.columns([2, 3, 5])
+
+                    with col_a:
+                        if st.button("✅ Apply", key=f"apply_{i}_{selected_section}"):
+                            try:
+                                editable_resume.apply_recommendation(rec)
+                                st.success(f"✅ Recommendation applied to {selected_section}")
+                                # Update the current section content display
+                                new_content = editable_resume.sections[selected_section].content
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"❌ Error applying recommendation: {str(e)}")
+
+                    with col_b:
+                        st.write(f"**Type:** {rec_type.capitalize()}")
+
+                    with col_c:
+                        st.write(f"**Content:** {content}")
+                        st.write(f"**Reason:** {reason}")
+        else:
+            st.info("No specific recommendations for this section.")
+    else:
+        st.info("No recommendations available. Please run analysis first.")
+
+    # Export options
+    st.subheader("💾 Export Options")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("📄 Export as Text"):
+            try:
+                final_text = editable_resume.get_final_resume_text()
+                st.session_state.exported_resume_text = final_text
+                st.success("✅ Resume exported successfully!")
+                st.download_button(
+                    "Download Exported Resume",
+                    data=final_text,
+                    file_name="edited_resume.txt",
+                    mime="text/plain"
+                )
+            except Exception as e:
+                st.error(f"❌ Error exporting: {str(e)}")
+
+    with col2:
+        if st.button("🔄 Export to PDF"):
+            try:
+                # TODO: Implement PDF export functionality
+                st.warning("PDF export functionality coming soon!")
+            except Exception as e:
+                st.error(f"❌ Error with PDF export: {str(e)}")
 
 def show_analysis_page():
     """Display the main analysis dashboard."""
