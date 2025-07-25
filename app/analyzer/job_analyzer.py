@@ -110,9 +110,17 @@ class JobAnalyzer:
             chain = simple_prompt | self.llm
             result = chain.invoke({"job_description": job_description_text})
             
-            # Manual JSON parsing with validation
+            # Manual JSON parsing with enhanced cleaning
             import json
             result = result.strip()
+            
+            # Handle thinking process in the response
+            if "<think>" in result and "</think>" in result:
+                # Extract content after thinking tags
+                think_start = result.find("<think>")
+                think_end = result.find("</think>", think_start) + len("</think>")
+                # Remove the thinking part
+                result = result[:think_start] + result[think_end:].strip()
             
             # Clean up common LLM formatting
             if "```json" in result:
@@ -127,6 +135,17 @@ class JobAnalyzer:
             if json_start >= 0 and json_end > json_start:
                 json_str = result[json_start:json_end]
                 data = json.loads(json_str)
+                
+                # Ensure all fields are lists
+                for field in ['required_skills', 'preferred_skills', 'required_experience', 
+                             'required_education', 'responsibilities', 'keywords']:
+                    if field in data:
+                        if isinstance(data[field], str):
+                            # Convert single string to list
+                            data[field] = [data[field]]
+                        elif not isinstance(data[field], list):
+                            # Convert other types to list
+                            data[field] = list(data[field]) if data[field] else []
                 
                 # Validate and create JobRequirements
                 return JobRequirements(**data)

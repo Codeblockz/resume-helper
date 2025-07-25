@@ -7,6 +7,9 @@ matches and gaps, and calculates a match score.
 
 from langchain_ollama import OllamaLLM
 from langchain.prompts import PromptTemplate
+from langchain.output_parsers import PydanticOutputParser
+
+from ..models.responses import ComparisonResults, MatchItem, GapItem
 
 
 class ResumeMatcher:
@@ -14,18 +17,20 @@ class ResumeMatcher:
     
     def __init__(self, model_name="qwen3:32b"):
         """
-        Initialize the ResumeMatcher.
+        Initialize the ResumeMatcher with structured output parsing.
         
         Args:
             model_name (str): Name of the Ollama model to use for comparison.
         """
         self.llm = OllamaLLM(model=model_name)
+        self.output_parser = PydanticOutputParser(pydantic_object=ComparisonResults)
         
-        # Create prompt template for resume-job comparison
+        # Create prompt template for resume-job comparison with format instructions
         self.comparison_prompt = PromptTemplate(
-            input_variables=["resume_sections", "job_requirements"],
             template="""
             Compare the following resume sections against the job requirements and identify matches and gaps.
+            
+            {format_instructions}
             
             Resume Sections:
             {resume_sections}
@@ -34,39 +39,22 @@ class ResumeMatcher:
             {job_requirements}
             
             For each category in the job requirements, identify:
-            1. Which requirements are matched in the resume
+            1. Which requirements are matched in the resume and where they were found
             2. Which requirements are missing or not clearly demonstrated
-            3. Suggestions for how to address the gaps
+            3. Specific suggestions for how to address each gap
+            4. Calculate an overall match score (0-100) and section-specific scores
             
-            Return the analysis in JSON format as follows:
-            {{
-                "matches": [
-                    {{"category": "required_skills", "item": "Python", "where_found": "Skills section"}},
-                    ...
-                ],
-                "gaps": [
-                    {{"category": "required_skills", "item": "Docker", "suggestion": "Add Docker experience to Skills section"}},
-                    ...
-                ],
-                "match_score": 85,
-                "section_scores": {{
-                    "required_skills": 80,
-                    "preferred_skills": 60,
-                    "required_experience": 90,
-                    "required_education": 100,
-                    "keywords": 75
-                }}
-            }}
-            
-            The match_score should be a percentage (0-100) representing how well the resume matches the job requirements overall.
-            The section_scores should be percentages for each category.
-            IMPORTANT: Return ONLY the JSON object, with no additional text, explanations, or thinking process.
-            """
+            Focus on being specific and actionable in your analysis.
+            """,
+            input_variables=["resume_sections", "job_requirements"],
+            partial_variables={
+                "format_instructions": self.output_parser.get_format_instructions()
+            }
         )
     
     def compare_resume_to_job(self, resume_data, job_requirements):
         """
-        Compare resume content to job requirements.
+        Compare resume content to job requirements using structured output parsing.
         
         Args:
             resume_data (dict or ResumeData): Structured resume data with sections.
@@ -80,18 +68,8 @@ class ResumeMatcher:
             print("Warning: No resume data provided")
             return self._basic_comparison_result()
             
-        # Check if it's a Pydantic model or dict
-        if not (isinstance(resume_data, dict) or hasattr(resume_data, 'sections')):
-            print("Warning: Invalid resume data format")
-            return self._basic_comparison_result()
-            
         if not job_requirements:
             print("Warning: No job requirements provided")
-            return self._basic_comparison_result()
-            
-        # Check if it's a Pydantic model or dict
-        if not (isinstance(job_requirements, dict) or hasattr(job_requirements, 'model_dump')):
-            print("Warning: Invalid job requirements format")
             return self._basic_comparison_result()
             
         try:
@@ -101,77 +79,22 @@ class ResumeMatcher:
             # Format job requirements for the prompt
             job_requirements_str = self._format_job_requirements(job_requirements)
             
-            # Use the prompt and LLM directly instead of LLMChain
-            chain = self.comparison_prompt | self.llm
+            # Create chain with structured output parsing
+            chain = self.comparison_prompt | self.llm | self.output_parser
+            
+            # Invoke chain with structured parsing
             result = chain.invoke({
                 "resume_sections": resume_sections_str,
                 "job_requirements": job_requirements_str
             })
             
-            # Parse the JSON result
-            import json
-            try:
-                # Clean the result to ensure it's valid JSON
-                # Sometimes LLMs add extra text before or after the JSON
-                result = result.strip()
-                
-                # Handle thinking process in the response
-                if "<think>" in result and "</think>" in result:
-                    # Extract content between thinking tags
-                    think_start = result.find("<think>")
-                    think_end = result.find("</think>", think_start) + len("</think>")
-                    # Remove the thinking part
-                    result = result[:think_start] + result[think_end:].strip()
-                
-                # If the result starts with a backtick (markdown code block), remove it
-                if result.startswith("```json"):
-                    result = result[7:].strip()
-                if result.startswith("```"):
-                    result = result[3:].strip()
-                if result.endswith("```"):
-                    result = result[:-3].strip()
-                
-                # Try to find JSON in the text - look for opening and closing braces
-                json_start = result.find('{')
-                json_end = result.rfind('}') + 1
-                
-                if json_start >= 0 and json_end > json_start:
-                    # Extract just the JSON part
-                    json_str = result[json_start:json_end]
-                    comparison_results = json.loads(json_str)
-                else:
-                    # If no JSON found, create a fallback structure
-                    print("No valid JSON structure found in response")
-                    return self._basic_comparison_result()
-                
-                # Validate the structure of the comparison results
-                if "matches" not in comparison_results:
-                    print("Warning: Missing 'matches' in comparison results")
-                    comparison_results["matches"] = []
-                
-                if "gaps" not in comparison_results:
-                    print("Warning: Missing 'gaps' in comparison results")
-                    comparison_results["gaps"] = []
-                
-                if "match_score" not in comparison_results:
-                    print("Warning: Missing 'match_score' in comparison results")
-                    comparison_results["match_score"] = 0
-                
-                if "section_scores" not in comparison_results:
-                    print("Warning: Missing 'section_scores' in comparison results")
-                    comparison_results["section_scores"] = {
-                        "required_skills": 0,
-                        "preferred_skills": 0,
-                        "required_experience": 0,
-                        "required_education": 0,
-                        "keywords": 0
-                    }
-                
-                return comparison_results
-            except json.JSONDecodeError as json_err:
-                print(f"Error parsing JSON from LLM response: {json_err}")
-                print(f"Raw LLM response: {result[:500]}...")  # Print first 500 chars of response
-                return self._basic_comparison_result()
+            # Convert Pydantic model to dictionary for backward compatibility
+            return result.model_dump()
+            
+        except Exception as parse_err:
+            print(f"Error parsing structured output: {parse_err}")
+            # Fall back to manual parsing
+            return self._fallback_parse(resume_data, job_requirements)
         except Exception as e:
             print(f"Error comparing resume to job: {e}")
             # Return basic structure as fallback
@@ -240,6 +163,77 @@ class ResumeMatcher:
                 formatted += "\n"
         
         return formatted
+    
+    def _fallback_parse(self, resume_data, job_requirements):
+        """
+        Fallback method using traditional parsing if Pydantic parsing fails.
+        
+        Args:
+            resume_data (dict or ResumeData): Structured resume data.
+            job_requirements (dict or JobRequirements): Structured job requirements.
+            
+        Returns:
+            dict: Parsed comparison results using fallback method.
+        """
+        try:
+            # Format resume sections for the prompt
+            resume_sections_str = self._format_resume_sections(resume_data)
+            
+            # Format job requirements for the prompt
+            job_requirements_str = self._format_job_requirements(job_requirements)
+            
+            # Use simpler prompt for fallback
+            simple_prompt = PromptTemplate(
+                input_variables=["resume_sections", "job_requirements"],
+                template="""
+                Compare this resume against the job requirements and return JSON:
+                
+                Resume Sections:
+                {resume_sections}
+                
+                Job Requirements:
+                {job_requirements}
+                
+                Return JSON with keys: matches, gaps, match_score, section_scores
+                """
+            )
+            
+            chain = simple_prompt | self.llm
+            result = chain.invoke({
+                "resume_sections": resume_sections_str,
+                "job_requirements": job_requirements_str
+            })
+            
+            # Manual JSON parsing with validation
+            import json
+            result = result.strip()
+            
+            # Clean up common LLM formatting
+            if "```json" in result:
+                result = result.split("```json")[1].split("```")[0]
+            elif "```" in result:
+                result = result.split("```")[1].split("```")[0]
+            
+            # Find JSON bounds
+            json_start = result.find('{')
+            json_end = result.rfind('}') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                json_str = result[json_start:json_end]
+                data = json.loads(json_str)
+                
+                # Validate and ensure required keys exist
+                comparison_results = self._basic_comparison_result()
+                comparison_results.update(data)
+                
+                return comparison_results
+            else:
+                print("No valid JSON found in fallback parsing")
+                return self._basic_comparison_result()
+                
+        except Exception as e:
+            print(f"Fallback parsing failed: {e}")
+            return self._basic_comparison_result()
     
     def _basic_comparison_result(self):
         """

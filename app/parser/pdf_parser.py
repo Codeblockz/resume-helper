@@ -114,21 +114,54 @@ class ResumeParser:
             ResumeSection: A Pydantic model containing structured resume sections.
         """
         try:
-            # Use chain with structured output parsing
-            chain = self.section_id_prompt | self.llm | self.output_parser
-
-            result = chain.invoke({"resume_text": resume_text})
+            # Get raw LLM response first
+            chain = self.section_id_prompt | self.llm
+            raw_response = chain.invoke({"resume_text": resume_text})
+            
+            # Preprocess the response to remove thinking tags and clean JSON
+            cleaned_response = self._preprocess_llm_response(raw_response)
+            
+            # Parse the cleaned response with Pydantic
+            result = self.output_parser.parse(cleaned_response)
             return result
 
         except Exception as parse_err:
             print(f"Error parsing structured output: {parse_err}")
             # Fall back to manual parsing if Pydantic parsing fails
             return self._fallback_parse(resume_text)
-        except Exception as e:
-            print(f"Error identifying sections: {e}")
-            # Return fallback structure as ResumeSection
-            basic_sections = self._basic_section_identification(resume_text)
-            return ResumeSection(**basic_sections)
+
+    def _preprocess_llm_response(self, raw_response):
+        """
+        Preprocess LLM response to extract clean JSON, removing thinking tags and other artifacts.
+
+        Args:
+            raw_response (str): The raw response from the LLM.
+
+        Returns:
+            str: Cleaned JSON string ready for Pydantic parsing.
+        """
+        result = raw_response.strip()
+        
+        # Remove thinking tags if present
+        if "<think>" in result and "</think>" in result:
+            think_start = result.find("<think>")
+            think_end = result.find("</think>", think_start) + len("</think>")
+            result = result[:think_start] + result[think_end:].strip()
+        
+        # Clean up common LLM formatting artifacts
+        if "```json" in result:
+            result = result.split("```json")[1].split("```")[0]
+        elif "```" in result:
+            result = result.split("```")[1].split("```")[0]
+        
+        # Extract JSON content by finding the outermost braces
+        json_start = result.find('{')
+        json_end = result.rfind('}') + 1
+        
+        if json_start >= 0 and json_end > json_start:
+            result = result[json_start:json_end]
+        
+        return result.strip()
 
     def _basic_section_identification(self, resume_text):
         """
@@ -140,7 +173,7 @@ class ResumeParser:
         Returns:
             dict: A dictionary with a single 'Full Text' section.
         """
-        return {"Full Text": resume_text}
+        return {"contact_information": resume_text}
 
     def _fallback_parse(self, resume_text):
         """
@@ -161,17 +194,25 @@ class ResumeParser:
 
                 {resume_text}
 
-                Return JSON with keys: Contact Information, Summary, Education,
-                Experience, Skills, Projects, Certifications, Additional
+                Return JSON with keys: contact_information, summary, education,
+                experience, skills, projects, certifications, additional
                 """
             )
 
             chain = simple_prompt | self.llm
             result = chain.invoke({"resume_text": resume_text})
 
-            # Manual JSON parsing
+            # Manual JSON parsing with enhanced cleaning
             import json
             result = result.strip()
+
+            # Handle thinking process in the response
+            if "<think>" in result and "</think>" in result:
+                # Extract content after thinking tags
+                think_start = result.find("<think>")
+                think_end = result.find("</think>", think_start) + len("</think>")
+                # Remove the thinking part
+                result = result[:think_start] + result[think_end:].strip()
 
             # Clean up common LLM formatting
             if "```json" in result:
@@ -187,17 +228,12 @@ class ResumeParser:
                 json_str = result[json_start:json_end]
                 data = json.loads(json_str)
 
-                # Map to ResumeSection fields
-                sections = {}
-                for field in ResumeSection.model_fields:
-                    snake_field = field.replace(" ", "_").lower()
-                    if snake_field in data:
-                        sections[field] = data[snake_field]
-
-                return ResumeSection(**sections)
+                # Create ResumeSection with proper field mapping
+                return ResumeSection(**data)
             else:
                 print("No valid JSON found in fallback parsing")
-                return self._basic_section_identification(resume_text)
+                basic_sections = self._basic_section_identification(resume_text)
+                return ResumeSection(**basic_sections)
 
         except Exception as e:
             print(f"Fallback parsing failed: {e}")
