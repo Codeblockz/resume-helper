@@ -2,8 +2,8 @@
 Resume Editor module for Resume Helper.
 
 This module provides functionality for editing and customizing resumes
-based on analysis results. It includes Pydantic models for editable resume data
-and core logic for managing resume edits.
+based on analysis results. It includes Pydantic models for editable resume data,
+core logic for managing resume edits, and CSS styling support.
 """
 
 from pydantic import BaseModel, Field
@@ -11,6 +11,8 @@ from typing import Optional, Dict, List
 from datetime import datetime
 
 from ..models.responses import ResumeData
+from .styles import RESUME_CSS_STYLES, CSS_TO_PDF_STYLE_MAP, DEFAULT_PDF_STYLE
+from .markdown_utils import MarkdownConverter
 
 
 class ResumeEditor:
@@ -49,7 +51,35 @@ class ResumeEditor:
                 if getattr(resume_data.sections, field) is not None
             }
 
-        # Add each section to the editable resume
+        # Try to extract style information from the original data
+        section_styles = {}
+        if hasattr(resume_data, 'sections') and hasattr(resume_data.sections, 'styles'):
+            styles_obj = resume_data.sections.styles
+            if isinstance(styles_obj, dict):
+                for section_title, class_name in styles_obj.items():
+                    # Map section titles to field names (e.g., "Contact Information" -> contact_information)
+                    field_name = None
+                    lower_title = section_title.lower()
+
+                    if 'contact' in lower_title or 'name' in lower_title:
+                        field_name = 'contact_information'
+                    elif 'summary' in lower_title or 'objective' in lower_title:
+                        field_name = 'summary'
+                    elif 'education' in lower_title or 'degrees' in lower_title:
+                        field_name = 'education'
+                    elif 'experience' in lower_title or 'work history' in lower_title:
+                        field_name = 'experience'
+                    elif 'skills' in lower_title or 'abilities' in lower_title:
+                        field_name = 'skills'
+                    elif 'projects' in lower_title:
+                        field_name = 'projects'
+                    elif 'certifications' in lower_title or 'licenses' in lower_title:
+                        field_name = 'certifications'
+
+                    if field_name:
+                        section_styles[field_name] = class_name
+
+        # Add each section to the editable resume with appropriate CSS classes
         for section_name, content in sections_dict.items():
             display_name = section_name.replace("_", " ").title()
             if display_name == "Contact Information":
@@ -64,7 +94,27 @@ class ResumeEditor:
                 display_name = "Education"
 
             if content:
+                # Get CSS class for this section (from original parsing)
+                css_class = section_styles.get(section_name)
+
+                # If no CSS class from styles, try to infer it from the section name
+                if not css_class:
+                    lower_section = display_name.lower()
+                    if 'contact' in lower_section or 'name' in lower_section:
+                        css_class = "resume-contact"
+                    elif 'summary' in lower_section or 'objective' in lower_section:
+                        css_class = "resume-summary"
+                    elif 'experience' in lower_section or 'work history' in lower_section:
+                        css_class = "resume-experience"
+                    elif 'education' in lower_section or 'degrees' in lower_section:
+                        css_class = "resume-education"
+                    elif 'skills' in lower_section or 'abilities' in lower_section:
+                        css_class = "resume-skills"
+
+                # Add section with CSS class
                 editable_resume.add_section(display_name, content)
+                if css_class and display_name in editable_resume.sections:
+                    editable_resume.sections[display_name].css_class = css_class
 
         return editable_resume
 
@@ -79,9 +129,8 @@ class ResumeEditor:
         for rec in recommendations:
             try:
                 result = editable_resume.apply_recommendation(rec)
-                print(f"✅ {result}")
             except Exception as e:
-                print(f"❌ Error applying recommendation: {str(e)}")
+                raise ValueError(f"Error applying recommendation: {str(e)}")
 
     def get_edit_summary(self, editable_resume: 'EditableResume') -> Dict[str, List[Dict]]:
         """
@@ -106,7 +155,7 @@ class ResumeEditor:
                             "change": f"{change_data['previous']} → {change_data['current']}"
                         })
                     except Exception as e:
-                        print(f"Warning: Could not parse edit history entry: {str(e)}")
+                        raise ValueError(f"Could not parse edit history entry: {str(e)}")
 
         return edit_summary
 
@@ -124,14 +173,18 @@ class ResumeEditor:
 
 
 class EditableResumeSection(BaseModel):
-    """Editable resume section with versioning and change tracking."""
-    
+    """Editable resume section with versioning, change tracking, and CSS styling."""
+
     content: str = Field(
         description="The editable text content of this section"
     )
     original_content: Optional[str] = Field(
         None,
         description="Original content from parsed resume (for comparison)"
+    )
+    css_class: Optional[str] = Field(
+        default=None,
+        description="CSS class for styling this section (e.g., 'resume-experience')"
     )
     last_edited: Optional[datetime] = Field(
         default_factory=datetime.now,
@@ -141,7 +194,7 @@ class EditableResumeSection(BaseModel):
         default_factory=list,
         description="History of changes made to this section"
     )
-    
+
     def apply_change(self, new_content: str) -> None:
         """Apply a change to this section and track it."""
         if self.content != new_content:
@@ -152,7 +205,7 @@ class EditableResumeSection(BaseModel):
                 "current": new_content
             }
             self.edit_history.append(str(change_record))
-            
+
             # Update content
             self.content = new_content
             self.last_edited = datetime.now()
@@ -171,25 +224,41 @@ class EditableResumeSection(BaseModel):
         """Format the content for display in the UI."""
         if not self.content.strip():
             return ""
-        
+
         lines = self.content.split('\n')
         formatted_lines = []
-        
+
         for line in lines:
             line = line.strip()
             if not line:
                 continue
-            
+
             # Format bullets
             if bullet_points and (line.startswith('- ') or line.startswith('• ')):
                 if not line.startswith('- '):
                     line = '• ' + line
             elif not line.startswith('-') and not line.startswith('•'):
                 line = '- ' + line
-            
+
             formatted_lines.append(line)
-        
+
         return '\n'.join(formatted_lines)
+
+    def to_markdown(self) -> str:
+        """Convert section content to markdown format."""
+        if not self.content.strip():
+            return ""
+
+        converter = MarkdownConverter()
+        return converter.text_to_markdown(self.content)
+    
+    def from_markdown(self, markdown_content: str) -> None:
+        """Update section content from markdown format."""
+        if not markdown_content or not isinstance(markdown_content, str):
+            return
+
+        converter = MarkdownConverter()
+        self.apply_change(converter.markdown_to_html(markdown_content))
 
 
 class EditableResume(BaseModel):
@@ -233,13 +302,16 @@ class EditableResume(BaseModel):
             }
         }
 
-    def add_section(self, name: str, content: str) -> None:
+    def add_section(self, name: str, content: str, css_class: Optional[str] = None) -> None:
         """Add a new editable section to the resume."""
         if name not in self.sections:
             self.sections[name] = EditableResumeSection(
                 content=content,
                 original_content=content
             )
+            # Apply CSS class if provided
+            if css_class:
+                self.sections[name].css_class = css_class
 
     def remove_section(self, name: str) -> Optional[str]:
         """Remove an existing section from the resume."""
@@ -251,14 +323,49 @@ class EditableResume(BaseModel):
     def get_final_resume_text(self) -> str:
         """Generate the final resume text after all edits."""
         edited_sections = []
-        
+
         for section_name, section_data in self.sections.items():
             if section_data.content.strip():
                 formatted_content = section_data.format_for_display()
                 if formatted_content.strip():
                     edited_sections.append(f"=== {section_name} ===\n{formatted_content}")
-        
+
         return "\n\n".join(edited_sections)
+
+    def export_to_markdown(self) -> str:
+        """Export the entire resume as markdown format."""
+        markdown_sections = []
+
+        for section_name, section_data in self.sections.items():
+            if section_data.content.strip():
+                # Convert each section to markdown
+                markdown_content = section_data.to_markdown()
+                if markdown_content.strip():
+                    # Format section header with appropriate markdown syntax
+                    header = f"# {section_name}"
+                    markdown_sections.append(f"{header}\n\n{markdown_content}")
+                    # Add extra space between sections
+                    markdown_sections.append("")  # Empty line for spacing
+
+        return "\n".join(markdown_sections)
+
+    def export_section_to_markdown(self, section_name: str) -> Optional[str]:
+        """Export a specific section as markdown format."""
+        if section_name not in self.sections:
+            return None
+
+        section = self.sections[section_name]
+        if not section.content.strip():
+            return None
+
+        # Convert to markdown
+        markdown_content = section.to_markdown()
+        if not markdown_content.strip():
+            return None
+
+        # Format with header and spacing
+        header = f"# {section_name}"
+        return f"{header}\n\n{markdown_content}"
 
     def apply_recommendation(self, recommendation: Dict) -> str:
         """Apply a specific recommendation to the appropriate section."""
@@ -365,59 +472,3 @@ class EditableResume(BaseModel):
             original_data=original_data,
             sections=editable_sections
         )
-
-# Example usage
-if __name__ == "__main__":
-    # Create an example editable resume
-    from ..models.responses import ResumeData, ResumeSection
-
-    # Sample data for testing
-    sample_resume = {
-        "raw_text": "John Doe\nSoftware Engineer...",
-        "sections": {
-            "contact_information": "John Doe\njohn.doe@example.com",
-            "skills": "Python, Django",
-            "experience": "Software Engineer at ABC Corp"
-        }
-    }
-    
-    # Convert to ResumeData model
-    resume_data = ResumeData(
-        raw_text=sample_resume["raw_text"],
-        sections=ResumeSection(**{k: v for k, v in sample_resume["sections"].items()})
-    )
-    
-    # Create editable resume
-    editable_resume = EditableResume(
-        raw_text=resume_data.raw_text,
-        original_data=resume_data
-    )
-    
-    # Add sections from the parsed data
-    for section_name, content in sample_resume["sections"].items():
-        display_name = section_name.replace("_", " ").title()
-        editable_resume.add_section(display_name, content)
-    
-    # Test basic functionality
-    print("=== Original Resume ===")
-    for name, section in editable_resume.sections.items():
-        print(f"{name}: {section.content}")
-    
-    # Apply a recommendation
-    recommendation = {
-        "section": "Skills",
-        "type": "add",
-        "content": "Flask",
-        "reason": "Web development framework"
-    }
-    result = editable_resume.apply_recommendation(recommendation)
-    print(f"\nApplied: {result}")
-    
-    # Test edit history
-    skills_section = editable_resume.sections["Skills"]
-    print(f"Edit history for Skills: {skills_section.edit_history}")
-    
-    # Generate final text
-    final_text = editable_resume.get_final_resume_text()
-    print("\n=== Final Resume Text ===")
-    print(final_text)

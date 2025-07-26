@@ -53,7 +53,7 @@ class JobRequirements(BaseModel):
 
 class ResumeSection(BaseModel):
     """Structured resume sections extracted from PDF resumes."""
-    
+
     contact_information: Optional[str] = Field(
         None,
         description="Contact details including name, email, phone, address"
@@ -86,7 +86,11 @@ class ResumeSection(BaseModel):
         None,
         description="Other relevant sections (awards, publications, etc.)"
     )
-    
+    styles: Optional[Dict[str, str]] = Field(
+        default_factory=dict,
+        description="CSS style information for each section (section_name -> CSS classes)"
+    )
+
     def to_dict(self) -> Dict[str, str]:
         """Convert to dictionary format for backward compatibility."""
         result = {}

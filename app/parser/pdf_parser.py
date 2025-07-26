@@ -163,17 +163,6 @@ class ResumeParser:
         
         return result.strip()
 
-    def _basic_section_identification(self, resume_text):
-        """
-        Basic section identification as fallback when LLM fails.
-
-        Args:
-            resume_text (str): The text content of the resume.
-
-        Returns:
-            dict: A dictionary with a single 'Full Text' section.
-        """
-        return {"contact_information": resume_text}
 
     def _fallback_parse(self, resume_text):
         """
@@ -240,6 +229,139 @@ class ResumeParser:
             basic_sections = self._basic_section_identification(resume_text)
             return ResumeSection(**basic_sections)
 
+    def extract_style_information(self, resume_text):
+        """
+        Extract style information from resume text by analyzing formatting patterns.
+
+        Args:
+            resume_text (str): The raw text content of the resume.
+
+        Returns:
+            Dict[str, str]: CSS style mappings for different sections and inline styles.
+        """
+        styles = {}
+        section_styles = {}  # Section-level styles
+        line_styles = []     # Line-level formatting information
+
+        # Analyze section headers to determine typical formatting
+        lines = [line.strip() for line in resume_text.split('\n') if line.strip()]
+
+        # Look for common section patterns (all-caps, bold markers)
+        current_section = None
+        previous_indentation = 0
+        section_start_indices = {}  # Track where each section starts
+
+        for i, line in enumerate(lines):
+            # Check for section header patterns - more comprehensive detection
+            is_section_header = False
+            indentation = self._calculate_indentation(line)
+
+            # Pattern 1: All caps or large text (simulated by checking if line has no lowercase letters)
+            if line.isupper() and len(line) > 2:
+                is_section_header = True
+
+            # Pattern 2: Underlined text (simulated by checking for repeated characters)
+            elif len(line) > 3 and any(char == '=' or char == '-' or char == '_' for char in line):
+                is_section_header = True
+
+            # Pattern 3: Line followed by content indentation (section header if much less indented than next lines)
+            elif i + 1 < len(lines):
+                next_line_indentation = self._calculate_indentation(lines[i+1])
+                prev_line_indentation = previous_indentation if i > 0 else 0
+
+                # Consider as section header if:
+                # - Not all caps (already handled above) AND
+                # - Has more than 2 words AND
+                # - Is much less indented than the next line (section start)
+                if (not line.isupper() and len(line.split()) > 2 and
+                    indentation < next_line_indentation - 1):
+                    is_section_header = True
+
+            # Pattern 4: Bold text markers (*text* or __text__)
+            elif (line.startswith('*') and line.endswith('*')) or (line.startswith('_') and line.endswith('_')):
+                is_section_header = True
+                line_styles.append({'line': i, 'style': 'font-weight: bold'})
+
+            # Pattern 5: Text with trailing colons or in angle brackets
+            elif line.endswith(':') or ('<' in line and '>' in line):
+                is_section_header = True
+
+            # If we detected a section header, assign styles and record position
+            if is_section_header:
+                # Determine the CSS class based on content with better keyword matching
+                lower_content = line.lower()
+
+                # More comprehensive keyword matching for different section types
+                if any(keyword in lower_content for keyword in ['name', 'address', 'phone', 'email', 'contact']):
+                    css_class = "resume-contact"
+                elif any(keyword in lower_content for keyword in ['summary', 'objective', 'professional summary', 'career objective']):
+                    css_class = "resume-summary"
+                elif any(keyword in lower_content for keyword in
+                         ['experience', 'work history', 'employment history', 'professional experience',
+                          'career experience', 'work background']):
+                    css_class = "resume-experience"
+                elif any(keyword in lower_content for keyword in
+                         ['education', 'degrees', 'schooling', 'academic background',
+                          'educational qualifications', 'institutions attended']):
+                    css_class = "resume-education"
+                elif any(keyword in lower_content for keyword in
+                         ['skills', 'abilities', 'competencies', 'technical skills',
+                          'professional skills', 'core competencies']):
+                    css_class = "resume-skills"
+                elif any(keyword in lower_content for keyword in
+                         ['projects', 'project experience', 'portfolios', 'notable projects']):
+                    css_class = "resume-projects"
+                elif any(keyword in lower_content for keyword in
+                         ['certifications', 'licenses', 'professional certifications',
+                          'industry certifications', 'accreditations']):
+                    css_class = "resume-certifications"
+                else:
+                    css_class = "resume-section"
+
+                current_section = line
+                section_styles[current_section] = css_class
+                section_start_indices[current_section] = i
+
+            # Detect bullet points or numbered lists with better patterns
+            elif (line.startswith('- ') or line.startswith('• ')
+                  or line.startswith('•') or ':' in line or '-' in line[:2]):
+                if i > 0 and current_section:
+                    if section_styles.get(current_section) != "resume-list":
+                        section_styles[current_section] = "resume-list"
+            else:
+                # Update previous indentation for the next iteration
+                previous_indentation = indentation
+
+        # Additional heading detection - first line or lines after blank lines
+        for i, line in enumerate(lines):
+            if (i == 0 or lines[i-1] == '') and len(line) > 5:
+                if not any(char.isdigit() for char in line[:3]) and ':' not in line:  # Not a bullet point
+                    if current_section is None or i < section_start_indices.get(current_section, float('inf')):
+                        if line.lower() not in [k.lower() for k in section_styles.keys()]:
+                            css_class = "resume-heading"
+                            section_styles[line] = css_class
+
+        styles['sections'] = section_styles
+        return styles
+
+    def _calculate_indentation(self, line):
+        """
+        Calculate indentation level of a line (number of leading spaces/tabs).
+
+        Args:
+            line (str): The text line to analyze.
+
+        Returns:
+            int: Number of indent characters at the start of the line.
+        """
+        indent = 0
+        for char in line:
+            if char == ' ' or char == '\t':
+                indent += 1
+            else:
+                break
+        return indent
+
     def parse_resume(self, pdf_file):
         """
         Parse a PDF resume file into structured Pydantic model.
@@ -253,8 +375,38 @@ class ResumeParser:
         # Extract text from PDF
         resume_text = self.extract_text_from_pdf(pdf_file)
 
+        # Extract style information before section identification
+        styles = self.extract_style_information(resume_text)
+
         # Identify sections using structured parsing
         sections = self.identify_sections(resume_text)
+
+        # Apply style information to the sections model
+        if hasattr(sections, 'styles'):
+            for section_name, css_class in styles.items():
+                # Map section names (e.g., "Contact Information" -> contact_information)
+                field_name = None
+                lower_section = section_name.lower()
+                
+                if 'contact' in lower_section or 'name' in lower_section:
+                    field_name = 'contact_information'
+                elif 'summary' in lower_section or 'objective' in lower_section:
+                    field_name = 'summary'
+                elif 'education' in lower_section or 'degrees' in lower_section:
+                    field_name = 'education'
+                elif 'experience' in lower_section or 'work history' in lower_section:
+                    field_name = 'experience'
+                elif 'skills' in lower_section or 'abilities' in lower_section:
+                    field_name = 'skills'
+                elif 'projects' in lower_section:
+                    field_name = 'projects'
+                elif 'certifications' in lower_section or 'licenses' in lower_section:
+                    field_name = 'certifications'
+                
+                if field_name and hasattr(sections, field_name):
+                    # Get the current styles dict and update it
+                    existing_styles = getattr(sections.styles, field_name, {})
+                    existing_styles[section_name] = css_class
 
         return ResumeData(raw_text=resume_text, sections=sections)
 
