@@ -1,26 +1,22 @@
 import React from 'react';
-import AppBar from '@mui/material/AppBar';
-import Toolbar from '@mui/material/Toolbar';
-import Typography from '@mui/material/Typography';
+import { AppBar, Toolbar, Typography, Button } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 
 const Header: React.FC = () => {
   return (
     <AppBar position="static" color="primary">
-      <Toolbar>
-        <Typography
-          variant="h6"
-          component={RouterLink}
-          to="/"
-          sx={{
-            textDecoration: 'none',
-            color: 'inherit',
-            fontWeight: 'bold',
-            flexGrow: 1,
-          }}
-        >
+      <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
+        <Typography variant="h6" component={RouterLink} to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
           Resume Tailor
         </Typography>
+        <div>
+          <Button component={RouterLink} to="/upload-resume" color="inherit">
+            Upload Resume
+          </Button>
+          <Button component={RouterLink} to="/job-description" color="inherit" sx={{ ml: 2 }}>
+            Job Description
+          </Button>
+        </div>
       </Toolbar>
     </AppBar>
   );
