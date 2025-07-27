@@ -3,16 +3,16 @@ import react from '@vitejs/plugin-react-swc';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      '@': __dirname + '/src',
-      'components': __dirname + '/src/components',
-      'pages': __dirname + '/src/pages'
-    }
-  },
   server: {
-    port: 3000,
-    open: true
+    port: 3002,
+    open: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8002',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      }
+    }
   },
   build: {
     outDir: '../backend/static',

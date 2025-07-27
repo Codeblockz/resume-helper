@@ -4,7 +4,7 @@ API endpoints for resume recommendation generation in Resume Tailor App
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from backend.services.ollama_service import OllamaService
+from services.ollama_service import OllamaService
 from typing import Dict, Any
 
 router = APIRouter(

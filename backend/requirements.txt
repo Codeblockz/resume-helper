@@ -21,6 +21,9 @@ beautifulsoup4>=4.12.3,<5.0.0
 # HTTP requests
 httpx>=0.26.0,<0.30.0
 
+# Form data handling
+python-multipart>=0.0.6,<0.1.0
+
 # Ollama integration
 ollama>=0.5.1,<0.6.0
 langchain-ollama==0.3.0

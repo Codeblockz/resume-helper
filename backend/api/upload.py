@@ -4,7 +4,7 @@ API endpoints for file upload functionality in Resume Tailor App
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, BackgroundTasks
 import os
-from backend.services.file_service import FileService
+from services.file_service import FileService
 
 router = APIRouter(
     prefix="/upload",

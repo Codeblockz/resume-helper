@@ -8,10 +8,10 @@ import uvicorn
 import os
 
 # Import API routers
-from backend.api.upload import router as upload_router
-from backend.api.recommendations import router as recommendations_router
-from backend.api.jobs import router as jobs_router
-from backend.api.tailoring import router as tailoring_router
+from api.recommendations import router as recommendations_router
+from api.jobs import router as jobs_router
+from api.tailoring import router as tailoring_router
+from api.upload import router as upload_router
 
 # Initialize FastAPI app
 app = FastAPI(

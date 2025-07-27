@@ -36,10 +36,19 @@ const ResumeUploadPage: React.FC = () => {
       setLoading(true);
       setMessage(null);
 
-      // Simulate API call (replace with actual API call)
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Actual API call to backend
+      const response = await fetch('/upload/resume', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include' as RequestCredentials
+      });
 
-      setMessage(`Successfully uploaded: ${file.name}`);
+      if (!response.ok) {
+        throw new Error(`Upload failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      setMessage(`Successfully uploaded: ${file.name} (ID: ${result.id})`);
     } catch (error) {
       setMessage('Failed to upload file. Please try again.');
     } finally {

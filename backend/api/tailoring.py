@@ -4,7 +4,7 @@ API endpoints for resume tailoring functionality in Resume Tailor App
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from backend.services.ollama_service import OllamaService
+from services.ollama_service import OllamaService
 
 router = APIRouter(
     prefix="/tailoring",
