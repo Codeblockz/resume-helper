@@ -5,10 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3002,
-    open: true,
+    open: false,
     proxy: {
       '/api': {
-        target: 'http://localhost:8002',
+        target: 'http://localhost:8010',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       }
@@ -18,6 +18,7 @@ export default defineConfig({
     outDir: '../backend/static',
     emptyOutDir: true,
     rollupOptions: {
+      input: './public/index.html',
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {

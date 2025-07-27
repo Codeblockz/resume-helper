@@ -1,59 +1,58 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Container, CssBaseline, Box, Typography } from '@mui/material';
-import Header from './components/Header';
-import ResumeUploadPage from './pages/ResumeUploadPage';
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { Container, Typography, Box, Button, Grid } from '@mui/material';
 import JobDescriptionPage from './pages/JobDescriptionPage';
+import ResumeEditorPage from './pages/ResumeEditorPage';
 import AnalysisResultsPage from './pages/AnalysisResultsPage';
-import ManualEntryForm from './pages/ManualEntryForm';
+
+const HomePage: React.FC = () => (
+  <Container maxWidth="md">
+    <Box sx={{ mt: 8, textAlign: 'center' }}>
+      <Typography variant="h3" gutterBottom>
+        Welcome to Resume Tailor
+      </Typography>
+      <Typography variant="h6" color="textSecondary" paragraph>
+        The intelligent resume optimization platform
+      </Typography>
+
+      <Grid container spacing={4} sx={{ mt: 6, justifyContent: 'center' }}>
+        <Grid item>
+          <Button
+            variant="contained"
+            size="large"
+            color="primary"
+            href="/job-description"
+          >
+            Enter Job Description
+          </Button>
+        </Grid>
+
+        <Grid item>
+          <Button
+            variant="outlined"
+            size="large"
+            color="secondary"
+            href="/resume-editor"
+          >
+            Edit Resume
+          </Button>
+        </Grid>
+      </Grid>
+    </Box>
+  </Container>
+);
 
 const App: React.FC = () => {
   return (
     <Router>
-      <Container maxWidth="lg">
-        <CssBaseline />
-        <Header />
-
-        <Box mt={4} mb={4}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/upload-resume" element={<ResumeUploadPage />} />
-            <Route path="/job-description" element={<JobDescriptionPage />} />
-            <Route path="/manual-entry" element={<ManualEntryForm />} />
-            <Route path="/results" element={<AnalysisResultsPage />} />
-          </Routes>
-        </Box>
-
-        <Box textAlign="center" mt={4} mb={2}>
-          <Typography variant="body2" color="textSecondary">
-            © {new Date().getFullYear()} Resume Tailor. All rights reserved.
-          </Typography>
-        </Box>
-      </Container>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/job-description" element={<JobDescriptionPage />} />
+        <Route path="/resume-editor" element={<ResumeEditorPage />} />
+        <Route path="/analysis-results" element={<AnalysisResultsPage />} />
+      </Routes>
     </Router>
   );
 };
-
-const Home: React.FC = () => (
-  <Box textAlign="center" py={8}>
-    <Typography variant="h3" gutterBottom>
-      Welcome to Resume Tailor
-    </Typography>
-    <Typography variant="body1" paragraph>
-      Optimize your resume with AI-powered analysis and tailoring.
-    </Typography>
-    <Box mt={4}>
-      <a href="/upload-resume">
-        <button>Upload Your Resume</button>
-      </a>
-      <a href="/job-description" style={{ marginLeft: '16px' }}>
-        <button>Analyze Job Description</button>
-      </a>
-      <a href="/manual-entry" style={{ marginLeft: '16px' }}>
-        <button>Manual Entry Form</button>
-      </a>
-    </Box>
-  </Box>
-);
 
 export default App;

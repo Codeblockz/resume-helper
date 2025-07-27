@@ -110,13 +110,32 @@ async def submit_manual_text(
             detail="'content_type' must be either 'resume' or 'job_description'"
         )
 
-    return {
-        "type": content_type,
-        "content_length": len(text_content),
-        "preview": text_content[:200] + "..." if len(text_content) > 200 else text_content,
-        "analysis_status": "success",
-        "keywords_found": ["Python", "Developer"] if content_type == "job_description" else []
-    }
+    try:
+        from services.ollama_service import OllamaService
+
+        if content_type == "job_description":
+            ollama_service = OllamaService()
+            analysis_result = ollama_service.analyze_job_description(text_content)
+
+            return {
+                "type": content_type,
+                "content_length": len(text_content),
+                "preview": text_content[:200] + "..." if len(text_content) > 200 else text_content,
+                "analysis_status": "success",
+                "analysis_result": analysis_result
+            }
+        else:
+            return {
+                "type": content_type,
+                "content_length": len(text_content),
+                "preview": text_content[:200] + "..." if len(text_content) > 200 else text_content,
+                "analysis_status": "success",
+                "keywords_found": ["Python", "Developer"]
+            }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
 
 @router.post("/manual-form", summary="Submit manual resume entry form data (query params)")
 async def submit_manual_form_query(

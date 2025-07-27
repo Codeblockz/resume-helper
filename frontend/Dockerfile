@@ -12,13 +12,13 @@ COPY ./package.json .
 COPY ./package-lock.json .
 
 # Install Node.js dependencies
-RUN npm install --prefer-offline --no-audit
+RUN npm install --prefer-offline --no-audit --legacy-peer-deps
 
 # Copy the rest of the application code
 COPY ./ /app
 
 # Expose the port the app runs on
-EXPOSE 3000
+EXPOSE 3001
 
 # Run the Vite development server
 CMD ["npm", "run", "dev"]

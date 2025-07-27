@@ -15,10 +15,31 @@ const JobDescriptionPage: React.FC = () => {
       setLoading(true);
       setMessage(null);
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Make actual API call to backend
+      const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+      const apiUrl = isLocalhost ? 'http://localhost:8002/api/upload/manual-text'
+        : '/api/upload/manual-text';
 
-      setMessage(`Job description submitted: ${jobTitle}`);
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          content_type: 'job_description',
+          text_content: description,
+          jobTitle,
+          company
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to submit job description');
+      }
+
+      const result = await response.json();
+      setMessage(`Job description submitted successfully!`);
     } catch (error) {
       setMessage('Failed to submit job description. Please try again.');
     } finally {
@@ -41,7 +62,7 @@ const JobDescriptionPage: React.FC = () => {
         </Typography>
 
         {message && (
-          <Alert severity={message.includes('submitted') ? 'success' : 'error'} sx={{ mb: 3 }}>
+          <Alert severity={message.includes('successfully') ? 'success' : 'error'} sx={{ mb: 3 }}>
             {message}
           </Alert>
         )}
