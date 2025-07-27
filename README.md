@@ -50,7 +50,70 @@ cd frontend
 npm install
 ```
 
-## Development
+## Development with Docker (Recommended)
+
+The easiest way to run the application is using Docker Compose, which sets up both services with proper networking and configuration.
+
+### Prerequisites
+
+- [Docker](https://www.docker.com/) installed on your machine
+- [Docker Compose](https://docs.docker.com/compose/) (usually included with Docker)
+
+### First-time setup
+
+1. Create a `.env` file in the `backend` directory with:
+
+```bash
+cd backend
+cp .env.example .env
+```
+
+2. Update environment variables as needed
+
+### Running the application
+
+To start both frontend and backend services:
+
+```bash
+docker-compose up --build
+```
+
+This will:
+- Build Docker images for both frontend and backend
+- Start containers on ports 3000 (frontend) and 8000 (backend)
+- Enable live reloading for development
+
+### Accessing the application
+
+- Frontend: http://localhost:3000
+- Backend API documentation: http://localhost:3000/docs (proxy through frontend)
+
+## Development without Docker
+
+If you prefer to run services manually:
+
+### Backend Requirements
+
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+Create a `.env` file with:
+
+```
+API_HOST=0.0.0.0
+API_PORT=8000
+DATABASE_URL=sqlite:///./data/resume_tailor.db
+OLLAMA_API_KEY=your_ollama_api_key_here
+```
+
+### Frontend Requirements
+
+```bash
+cd frontend
+npm install
+```
 
 Start backend API:
 

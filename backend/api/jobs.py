@@ -43,7 +43,7 @@ async def create_job(
 @router.post("/upload", summary="Upload a job description file")
 async def upload_job_description(
     file: UploadFile = File(...),
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks = None
 ):
     """
     Upload a job description file (PDF, DOCX, TXT).

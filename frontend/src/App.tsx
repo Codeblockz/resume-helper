@@ -5,6 +5,7 @@ import Header from './components/Header';
 import ResumeUploadPage from './pages/ResumeUploadPage';
 import JobDescriptionPage from './pages/JobDescriptionPage';
 import AnalysisResultsPage from './pages/AnalysisResultsPage';
+import ManualEntryForm from './pages/ManualEntryForm';
 
 const App: React.FC = () => {
   return (
@@ -18,6 +19,7 @@ const App: React.FC = () => {
             <Route path="/" element={<Home />} />
             <Route path="/upload-resume" element={<ResumeUploadPage />} />
             <Route path="/job-description" element={<JobDescriptionPage />} />
+            <Route path="/manual-entry" element={<ManualEntryForm />} />
             <Route path="/results" element={<AnalysisResultsPage />} />
           </Routes>
         </Box>
@@ -46,6 +48,9 @@ const Home: React.FC = () => (
       </a>
       <a href="/job-description" style={{ marginLeft: '16px' }}>
         <button>Analyze Job Description</button>
+      </a>
+      <a href="/manual-entry" style={{ marginLeft: '16px' }}>
+        <button>Manual Entry Form</button>
       </a>
     </Box>
   </Box>

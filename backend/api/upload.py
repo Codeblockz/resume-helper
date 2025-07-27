@@ -117,3 +117,99 @@ async def submit_manual_text(
         "analysis_status": "success",
         "keywords_found": ["Python", "Developer"] if content_type == "job_description" else []
     }
+
+@router.post("/manual-form", summary="Submit manual resume entry form data (query params)")
+async def submit_manual_form_query(
+    firstName: str,
+    lastName: str,
+    jobTitle: str,
+    email: str = None,
+    phone: str = None,
+    summary: str = "",
+    experiences: list = [],
+    skills: list = [],
+    education: list = []
+):
+    """
+    Submit structured resume data from the manual entry form.
+    Returns analysis and processing status.
+    """
+    if not firstName or not lastName or not jobTitle:
+        raise HTTPException(status_code=400, detail="First name, last name, and job title are required")
+
+    # Basic validation
+    if len(experiences) > 10:
+        raise HTTPException(status_code=400, detail="Too many experience entries")
+
+    if len(skills) > 20:
+        raise HTTPException(status_code=400, detail="Too many skill entries")
+
+    return {
+        "status": "success",
+        "resume_data": {
+            "firstName": firstName,
+            "lastName": lastName,
+            "jobTitle": jobTitle,
+            "email": email or "",
+            "phone": phone or "",
+            "summary": summary,
+            "experiences": experiences,
+            "skills": skills,
+            "education": education
+        },
+        "analysis_results": {
+            "resume_score": 85,  # Placeholder score
+            "keywords_identified": ["Python", "React"] if "developer" in jobTitle.lower() else [],
+            "suggestions": [
+                "Add more details to your experience descriptions",
+                "Consider including certifications"
+            ]
+        }
+    }
+
+@router.post("/manual-form-json", summary="Submit manual resume entry form data (JSON body)")
+async def submit_manual_form_json(form_data: dict):
+    """
+    Submit structured resume data from the manual entry form as JSON.
+    Returns analysis and processing status.
+    """
+    # Parse the input data
+    firstName = form_data.get('firstName')
+    lastName = form_data.get('lastName')
+    jobTitle = form_data.get('jobTitle')
+
+    if not firstName or not lastName or not jobTitle:
+        raise HTTPException(status_code=400, detail="First name, last name, and job title are required")
+
+    # Basic validation
+    experiences = form_data.get('experiences', [])
+    skills = form_data.get('skills', [])
+
+    if len(experiences) > 10:
+        raise HTTPException(status_code=400, detail="Too many experience entries")
+
+    if len(skills) > 20:
+        raise HTTPException(status_code=400, detail="Too many skill entries")
+
+    return {
+        "status": "success",
+        "resume_data": {
+            "firstName": firstName,
+            "lastName": lastName,
+            "jobTitle": jobTitle,
+            "email": form_data.get('email') or "",
+            "phone": form_data.get('phone') or "",
+            "summary": form_data.get('summary', ""),
+            "experiences": experiences,
+            "skills": skills,
+            "education": form_data.get('education', [])
+        },
+        "analysis_results": {
+            "resume_score": 85,  # Placeholder score
+            "keywords_identified": ["Python", "React"] if "developer" in jobTitle.lower() else [],
+            "suggestions": [
+                "Add more details to your experience descriptions",
+                "Consider including certifications"
+            ]
+        }
+    }
