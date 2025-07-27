@@ -1,39 +1,99 @@
+# Node.js
+node_modules/
+dist/
+build/
+*.log
+yarn-error.log
+npm-debug.log*
+pnpm-debug.log*
+
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
-venv/
-env/
-ENV/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+.env
+.env.*
 .DS_Store
 
-# Project specific
-*.log
-.coverage
-htmlcov/
+# macOS
+.DS_Store
+
+# Linux
+*.swp
+*.swo
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# Build directories
+/build/
+
+# Frontend build artifacts
+.frontend_cache/
+.next/
+.out/
+.vercel/
+.angular/
+
+# Uploaded files
+/uploaded_files/
+
+# Temporary files
+/tmp/*
+/tmp/**/*
+
+# SQLite database file
+data/resume_tailor.db
+
+# Ollama model cache
+.ollama_cache/
+
+# Coverage reports
+.coverage*
+.coveralls.yml
+coveralls.yml
+.hypothesis/
 .pytest_cache/
+.tox/
+.nox/
+.htmlcov/
+.coverage*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv
+python_env/
+virtualenvs/
+.virtualenvs/
+
+# Docker
+docker-compose.override.yml
+.docker/
+.DS_Store
+
+# IDEs and editors
+.idea/
+.vscode/
+.sublime-project
+.sublime-workspace
+.atom/
+.vscode-test/
+*.subline-project
+*.sublime-workspace
+
+# Log files
+logs/
+*.log
+*.zip
+nohup.out
+streamlit.log
