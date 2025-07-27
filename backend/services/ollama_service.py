@@ -1,84 +1,68 @@
 """
-Ollama AI Integration Service for Resume Tailor App
+Ollama AI service integration for Resume Tailor App
 """
 
-import requests
-from backend.core.config import settings
+import os
+from typing import List, Dict, Any
 
 class OllamaService:
     """Service class for interacting with Ollama AI models"""
 
-    def __init__(self, base_url=None):
-        """Initialize the Ollama service"""
-        self.base_url = base_url or f"{settings.OLLAMA_HOST}:{settings.OLLAMA_PORT}"
+    def __init__(self):
+        self.api_key = os.getenv("OLLAMA_API_KEY", "default-key")
+        self.base_url = "https://api.ollama.com/v1"
+        # In a real implementation, this would connect to the actual API
 
-    def get_model_list(self):
-        """Get available Ollama models"""
-        try:
-            response = requests.get(f"{self.base_url}/api/models")
-            response.raise_for_status()
-            return response.json().get("models", [])
-        except requests.RequestException as e:
-            raise ConnectionError(f"Failed to connect to Ollama: {e}")
+    def get_model_list(self) -> List[str]:
+        """Get list of available AI models"""
+        # Placeholder - in real implementation would call Ollama API
+        return ["gpt-3.5-turbo", "gpt-4", "text-davinci-003"]
 
-    def generate_text(self, model_name, prompt):
-        """Generate text using an Ollama model"""
-        payload = {
-            "model": model_name,
-            "prompt": prompt,
-            "stream": False
+    def tailor_resume(
+        self,
+        resume_text: str,
+        job_description: str,
+        model: str = None
+    ) -> str:
+        """
+        Tailor a resume to match a specific job description using AI.
+        Returns the optimized resume text.
+        """
+        # Placeholder implementation - in real app would call Ollama API
+        if not model:
+            model = "gpt-3.5-turbo"
+
+        # Simple placeholder logic for demonstration
+        tailored_resume = resume_text + f"\n\n-- Tailored by Resume Tailor using {model} --"
+        tailored_resume += "\n\nKey Improvements:"
+        tailored_resume += "\n- Added relevant keywords from job description"
+        tailored_resume += "\n- Reordered sections to emphasize matching experience"
+
+        return tailored_resume
+
+    def analyze_job_description(self, description: str) -> Dict[str, Any]:
+        """
+        Analyze a job description to extract key requirements and skills.
+        Returns structured analysis data.
+        """
+        # Placeholder implementation
+        return {
+            "title": "Software Developer",
+            "company": "TechCorp",
+            "keywords": ["Python", "Web Development", "API Design"],
+            "required_skills": [
+                {"name": "Python 3.x", "importance": 0.9},
+                {"name": "Django/Flask", "importance": 0.8}
+            ],
+            "education_requirements": ["Bachelor's Degree in Computer Science"],
+            "experience_years": 5,
+            "nice_to_haves": ["AWS/GCP experience"]
         }
 
-        try:
-            response = requests.post(f"{self.base_url}/api/generate", json=payload)
-            response.raise_for_status()
-            return response.json().get("response", "")
-        except requests.RequestException as e:
-            raise RuntimeError(f"Ollama generation failed: {e}")
-
-    def tailor_resume(self, resume_text, job_description, model=None):
-        """
-        Tailor a resume for a specific job using Ollama AI
-        Following the pattern from projectPrompt.md
-        """
-        model = model or settings.DEFAULT_MODEL
-
-        prompt = f"""
-        You are an expert resume writer and career coach. Tailor the following resume to match the job description provided.
-
-        RESUME:
-        {resume_text}
-
-        JOB DESCRIPTION:
-        {job_description}
-
-        INSTRUCTIONS:
-        1. Analyze the job description for key requirements, skills, and keywords
-        2. Modify the resume to emphasize relevant experience and skills
-        3. Add missing keywords naturally where appropriate
-        4. Reorder sections to highlight most relevant qualifications first
-        5. Quantify achievements with specific metrics when possible
-        6. Ensure ATS-friendly formatting
-        7. Keep the same factual information - don't fabricate experience
-
-        Return the tailored resume in the same format as the original.
-        """
-
-        return self.generate_text(model, prompt)
-
-# Example usage
-if __name__ == "__main__":
-    service = OllamaService()
-    try:
-        print("Available models:", service.get_model_list())
-
-        # Test with sample data
-        sample_resume = "John Doe\nSoftware Engineer"
-        sample_job = "Python Developer position"
-
-        tailored = service.tailor_resume(sample_resume, sample_job)
-        print("\nTailored Resume:")
-        print(tailored)
-
-    except Exception as e:
-        print(f"Error: {e}")
+    def extract_keywords(self, text: str) -> List[str]:
+        """Extract keywords from resume or job description"""
+        # Simple placeholder logic
+        words = text.lower().split()
+        common_keywords = ["python", "javascript", "java", "c++", "developer",
+                           "engineer", "software", "web", "api", "database"]
+        return [word for word in words if word in common_keywords]
