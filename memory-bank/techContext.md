@@ -28,6 +28,7 @@ Resume Helper is a comprehensive web-based application designed to help job seek
 - **Package Management**: npm/yarn for frontend, Poetry for backend
 - **Build Tools**: Vite for fast React development
 - **Testing Frameworks**: Jest/Cypress for comprehensive test coverage
+- **Containerization**: Docker with docker-compose for local development and deployment
 
 ## Key Technical Components
 
