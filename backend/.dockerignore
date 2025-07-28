@@ -1,0 +1,38 @@
+# Python
+__pycache__
+*.py[cod]
+env/
+venv/
+
+# Logs and temporary files
+*.log
+/tmp/*
+/data/*
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Environment files (copied separately)
+.env
+
+# Git
+.git
+.gitignore
+
+# IDE files
+.vscode/
+.idea/
+
+# Node modules (if any in backend)
+node_modules/
+
+# Test files
+tests/
+test_*
+*_test.py
+
+# Virtual environments
+venv/
+.env*

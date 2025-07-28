@@ -1,0 +1,46 @@
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Build artifacts
+dist/
+build/
+
+# Environment files (copied separately)
+.env
+
+# Git
+.git
+.gitignore
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs and temporary files
+*.log
+/tmp/*
+
+# Development tools
+coverage/
+cypress/
+cypress.json
+jest.config.js
+wallaby.js
+test-output/
+*.lcov
+*.tsbuildinfo
+
+# Test files
+tests/
+test_*
+*_test.ts
+
+# Build cache
+.cache/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# VS Code cache
+.vscode/
