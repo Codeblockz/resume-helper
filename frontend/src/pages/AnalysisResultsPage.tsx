@@ -121,7 +121,7 @@ const AnalysisResultsPage: React.FC = () => {
         <Paper elevation={3} sx={{ p: 3 }}>
           <Typography variant="h6">Tailored Resume Preview</Typography>
           <pre style={{ whiteSpace: 'pre-wrap', overflowX: 'auto' }}>{analysisResult.tailoredResumePreview || 'No tailored preview available'}</pre>
-        </Box>
+        </Paper>
       </Box>
     </Container>
   );

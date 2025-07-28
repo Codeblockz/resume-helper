@@ -6,8 +6,9 @@ from fastapi.staticfiles import StaticFiles
 
 def setup_static_routes(app):
     """Set up static file routes for frontend assets"""
-    app.mount("/static", StaticFiles(directory="backend/static"), name="static")
-    app.mount("/", StaticFiles(directory="backend/static", html=True), name="frontend")
+    # Serve production build at root, API on /api subpath
+    app.mount("/static", StaticFiles(directory="/app/static"), name="static")
+    app.mount("/", StaticFiles(directory="/app/static/public", html=True), name="frontend")
 
 # Add this to main.py after app creation
 if __name__ == "__main__":

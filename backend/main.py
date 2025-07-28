@@ -13,6 +13,9 @@ from api.jobs import router as jobs_router
 from api.tailoring import router as tailoring_router
 from api.upload import router as upload_router
 
+# Import static file setup
+from core.static import setup_static_routes
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Resume Tailor API",
@@ -47,6 +50,9 @@ def read_root():
             # Add other endpoints here
         }
     }
+
+# Set up static file routes for frontend assets
+setup_static_routes(app)
 
 if __name__ == "__main__":
     # Read configuration from environment variables
