@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button, Typography, Container, Box, TextField, CircularProgress, Alert } from '@mui/material';
+import { useWorkflow, setJobDescription } from '../contexts/ResumeTailorContext';
 
 const JobDescriptionPage: React.FC = () => {
   const [jobTitle, setJobTitle] = useState("");
@@ -8,6 +10,9 @@ const JobDescriptionPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  const { dispatch } = useWorkflow();
+  const navigate = useNavigate();
+
   const handleSubmit = async () => {
     if (!jobTitle || !description) return;
 
@@ -15,31 +20,14 @@ const JobDescriptionPage: React.FC = () => {
       setLoading(true);
       setMessage(null);
 
-      // Make actual API call to backend
-      const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-      const apiUrl = isLocalhost ? 'http://localhost:8002/api/upload/manual-text'
-        : '/api/upload/manual-text';
+      // Save job description to context
+      dispatch(setJobDescription({
+        jobTitle,
+        company: company || undefined,
+        description
+      }));
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          content_type: 'job_description',
-          text_content: description,
-          jobTitle,
-          company
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to submit job description');
-      }
-
-      const result = await response.json();
-      setMessage(`Job description submitted successfully!`);
+      navigate('/resume-editor');
     } catch (error) {
       setMessage('Failed to submit job description. Please try again.');
     } finally {
@@ -103,7 +91,7 @@ const JobDescriptionPage: React.FC = () => {
             disabled={!jobTitle || !description || loading}
             fullWidth
           >
-            {loading ? <CircularProgress size={24} /> : 'Analyze Job Description'}
+            {loading ? <CircularProgress size={24} /> : 'Next: Upload Resume'}
           </Button>
         </Box>
       </Box>

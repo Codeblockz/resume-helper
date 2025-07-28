@@ -4,6 +4,7 @@ import { Container, Typography, Box, Button, Grid } from '@mui/material';
 import JobDescriptionPage from './pages/JobDescriptionPage';
 import ResumeEditorPage from './pages/ResumeEditorPage';
 import AnalysisResultsPage from './pages/AnalysisResultsPage';
+import { ResumeTailorProvider } from './contexts/ResumeTailorContext';
 
 const HomePage: React.FC = () => (
   <Container maxWidth="md">
@@ -45,12 +46,14 @@ const HomePage: React.FC = () => (
 const App: React.FC = () => {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/job-description" element={<JobDescriptionPage />} />
-        <Route path="/resume-editor" element={<ResumeEditorPage />} />
-        <Route path="/analysis-results" element={<AnalysisResultsPage />} />
-      </Routes>
+      <ResumeTailorProvider>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/job-description" element={<JobDescriptionPage />} />
+          <Route path="/resume-editor" element={<ResumeEditorPage />} />
+          <Route path="/analysis-results" element={<AnalysisResultsPage />} />
+        </Routes>
+      </ResumeTailorProvider>
     </Router>
   );
 };

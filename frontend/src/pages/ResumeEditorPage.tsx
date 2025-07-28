@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button, Typography, Container, Box, TextField, CircularProgress, Alert, Select, MenuItem, FormControl, InputLabel, SelectChangeEvent } from '@mui/material';
+import { useWorkflow, setResumeData, setAnalysisResult } from '../contexts/ResumeTailorContext';
 
 const ResumeEditorPage: React.FC = () => {
   // State for managing editor content and UI
@@ -9,10 +11,14 @@ const ResumeEditorPage: React.FC = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
+  const { state, dispatch } = useWorkflow();
+  const navigate = useNavigate();
+
   // Load sample resume data when component mounts
   useEffect(() => {
     // In a real app, this would load from the backend API
-    const sampleResume = `=== Contact Information ===
+    if (!state.resumeData) {
+      const sampleResume = `=== Contact Information ===
 John Doe
 john.doe@example.com
 (123) 456-7890
@@ -32,15 +38,24 @@ Senior Software Engineer, TechCorp (2018-Present)
 - Led development of high-traffic web services using Python and Django
 - Implemented microservices architecture for scalability`;
 
-    // Parse the sample resume into sections
-    const parsedSections = parseResume(sampleResume);
-    setSections(parsedSections);
+      // Parse the sample resume into sections
+      const parsedSections = parseResume(sampleResume);
+      setSections(parsedSections);
 
-    if (Object.keys(parsedSections).length > 0) {
-      setCurrentSection(Object.keys(parsedSections)[0]);
-      setEditedContent(parsedSections[Object.keys(parsedSections)[0]]);
+      if (Object.keys(parsedSections).length > 0) {
+        setCurrentSection(Object.keys(parsedSections)[0]);
+        setEditedContent(parsedSections[Object.keys(parsedSections)[0]]);
+      }
+    } else {
+      // Use resume data from context
+      const { content, sections: savedSections } = state.resumeData;
+      setSections(savedSections || parseResume(content));
+      if (savedSections && Object.keys(savedSections).length > 0) {
+        setCurrentSection(Object.keys(savedSections)[0]);
+        setEditedContent(savedSections[Object.keys(savedSections)[0]]);
+      }
     }
-  }, []);
+  }, [state.resumeData]);
 
   // Parse resume text into sections
   const parseResume = (resumeText: string): { [key: string]: string } => {
@@ -85,18 +100,46 @@ Senior Software Engineer, TechCorp (2018-Present)
     setEditedContent(event.target.value);
   };
 
-  const handleSave = () => {
+  const handleSaveAndAnalyze = async () => {
     if (!currentSection) return;
 
-    setLoading(true);
-
     try {
-      // In a real app, this would call the backend API to save changes
-      const updatedSections = { ...sections, [currentSection]: editedContent };
-      setSections(updatedSections);
-      setMessage('Changes saved successfully!');
+      setLoading(true);
+
+      // Save resume data to context
+      dispatch(setResumeData({
+        content: Object.values(sections).join('\n\n'),
+        sections
+      }));
+
+      // Call backend for analysis (simulated)
+      const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+      const apiUrl = isLocalhost ? 'http://localhost:8010/api/analyze-resume' : '/api/analyze-resume';
+
+      // Simulate API call with sample data for now
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const sampleAnalysisResult = {
+        resumeScore: 85,
+        jobMatchPercentage: 72,
+        improvementsSuggested: [
+          "Add 'Python' to skills section",
+          "Highlight AWS experience",
+          "Reorder sections to emphasize relevant experience"
+        ],
+        keywordsAnalysis: {
+          matched: ["Python", "Web Development"],
+          missing: ["Django"]
+        },
+        tailoredResumePreview: editedContent + "\n\n-- Tailored by Resume Tailor --\n\nKey Improvements:\n- Added job-specific keywords\n- Emphasized relevant experience"
+      };
+
+      // Save analysis result to context
+      dispatch(setAnalysisResult(sampleAnalysisResult));
+
+      navigate('/analysis-results');
     } catch (error) {
-      setMessage('Failed to save changes. Please try again.');
+      setMessage('Failed to analyze resume. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -132,14 +175,14 @@ Senior Software Engineer, TechCorp (2018-Present)
             </Select>
           </FormControl>
 
-          {/* Save button */}
+          {/* Save and analyze button */}
           <Button
             variant="contained"
             color="primary"
-            onClick={handleSave}
+            onClick={handleSaveAndAnalyze}
             disabled={!currentSection || loading}
           >
-            {loading ? <CircularProgress size={24} /> : 'Save Changes'}
+            {loading ? <CircularProgress size={24} /> : 'Analyze & Get Results'}
           </Button>
         </Box>
 
