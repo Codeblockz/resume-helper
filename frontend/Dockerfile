@@ -1,5 +1,5 @@
-# Use official Node.js image from the Debian repository
-FROM node:20-bookworm
+# Use official Node.js image from the Debian repository for building
+FROM node:20-bookworm as build
 
 # Set environment variables
 ENV NODE_ENV=development
@@ -17,8 +17,17 @@ RUN npm install --prefer-offline --no-audit --legacy-peer-deps
 # Copy the rest of the application code
 COPY ./ /app
 
-# Expose the port the app runs on
-EXPOSE 3001
+# Build the frontend for production
+RUN npm run build
 
-# Run the Vite development server
-CMD ["npm", "run", "dev"]
+# Use official Nginx image for serving the production build
+FROM nginx:alpine as production
+
+# Copy Nginx configuration file
+COPY ./default.conf /etc/nginx/conf.d/
+
+# Copy built files from previous stage to Nginx HTML directory
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Expose port 3000 for Nginx
+EXPOSE 3000

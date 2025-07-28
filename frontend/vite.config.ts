@@ -1,35 +1,32 @@
+// @ts-check
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react-swc';
+import reactRefresh from '@vitejs/plugin-react-refresh';
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [reactRefresh()],
   server: {
     port: 3000,
-    host: '0.0.0.0',
+    host: true,
     open: false,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8010',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
-      }
-    }
+    hmr: { clientPort: 443 } // Fix for Vite HMR
   },
   build: {
     outDir: './dist',
     emptyOutDir: true,
     rollupOptions: {
-      input: './public/index.html',
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            return id.toString().split('node_modules/')[1].split('/')[0].toString();
-          }
-        }
-      }
+      input: './src/main.tsx' // Explicit entry point
     }
   },
   css: {
     devSourcemap: true
+  },
+  resolve: {
+    alias: {
+      '@': '/src'
+    }
+  },
+  base: './',
+  optimizeDeps: {
+    include: ['react', 'react-dom']
   }
 });

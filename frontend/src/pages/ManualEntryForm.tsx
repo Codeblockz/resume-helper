@@ -95,7 +95,8 @@ const ManualEntryForm: React.FC = () => {
 
       // Make actual API call to backend
       // Use backend service name when running with Docker Compose
-      const apiUrl = process.env.NODE_ENV === 'development' && window.location.hostname === 'localhost'
+      const apiUrl = (typeof process !== 'undefined' && process.env.NODE_ENV === 'development' &&
+                   window.location.hostname === 'localhost')
         ? 'http://localhost:8002/api/upload/manual-form-json'
         : 'http://backend/api/upload/manual-form-json';
 

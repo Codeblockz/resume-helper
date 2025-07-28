@@ -44,10 +44,16 @@ const HomePage: React.FC = () => (
 );
 
 const App: React.FC = () => {
+  // Redirect root to home page for development
+  if (window.location.pathname === '/') {
+    window.location.href = '/index.html';
+  }
+
   return (
     <Router>
       <ResumeTailorProvider>
         <Routes>
+          <Route path="/index.html" element={<HomePage />} />
           <Route path="/" element={<HomePage />} />
           <Route path="/job-description" element={<JobDescriptionPage />} />
           <Route path="/resume-editor" element={<ResumeEditorPage />} />
