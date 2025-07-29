@@ -12,7 +12,7 @@ COPY ./package.json .
 COPY ./package-lock.json .
 
 # Install Node.js dependencies
-RUN npm install --prefer-offline --no-audit --legacy-peer-deps
+RUN npm install --prefer-offline --no-audit --force --legacy-peer-deps
 
 # Copy the rest of the application code
 COPY ./ /app
